@@ -4,7 +4,7 @@
 """
 
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox, filedialog
+from tkinter import ttk, scrolledtext, messagebox, filedialog, simpledialog
 import json
 import os
 import requests
@@ -118,6 +118,8 @@ class NovelProject:
     title: str = ""
     theme: str = ""
     outline: str = ""
+    outline_additional_prompt: str = ""  # 大綱生成額外指示
+    chapters_additional_prompt: str = ""  # 章節劃分額外指示
     chapters: List[Chapter] = None
     world_building: WorldBuilding = None
     current_context: str = ""
@@ -653,7 +655,7 @@ class NovelWriterCore:
         self.current_paragraph = 0
     
     @safe_execute
-    def generate_outline(self, additional_prompt: str = "") -> Dict:
+    def generate_outline(self, additional_prompt: str = "", tree_callback: Callable = None) -> Dict:
         """生成整體大綱"""
         prompt = f"""
 請為一部名為《{self.project.title}》的小說生成完整的整體大綱。
@@ -676,11 +678,15 @@ class NovelWriterCore:
         if result:
             self.project.outline = json.dumps(result, ensure_ascii=False, indent=2)
             self._update_world_building_from_outline(result)
+            
+            # 通知樹視圖更新
+            if tree_callback:
+                tree_callback("outline_generated", result)
         
         return result
     
     @safe_execute
-    def divide_chapters(self, additional_prompt: str = "") -> List[Chapter]:
+    def divide_chapters(self, additional_prompt: str = "", tree_callback: Callable = None) -> List[Chapter]:
         """劃分章節"""
         prompt = f"""
 基於以下大綱，請劃分出10-15個章節：
@@ -717,12 +723,17 @@ class NovelWriterCore:
                 chapters.append(chapter)
             
             self.project.chapters = chapters
+            
+            # 通知樹視圖更新
+            if tree_callback:
+                tree_callback("chapters_generated", chapters)
+            
             return chapters
         
         return []
     
     @safe_execute
-    def generate_chapter_outline(self, chapter_index: int) -> Dict:
+    def generate_chapter_outline(self, chapter_index: int, tree_callback: Callable = None) -> Dict:
         """生成章節大綱"""
         if chapter_index >= len(self.project.chapters):
             raise ValueError("章節索引超出範圍")
@@ -751,12 +762,17 @@ class NovelWriterCore:
         
         if result and "outline" in result:
             chapter.outline = result["outline"]
+            
+            # 通知樹視圖更新
+            if tree_callback:
+                tree_callback("chapter_outline_generated", {"chapter_index": chapter_index, "outline": result["outline"]})
+            
             return result["outline"]
         
         return {}
     
     @safe_execute
-    def divide_paragraphs(self, chapter_index: int) -> List[Paragraph]:
+    def divide_paragraphs(self, chapter_index: int, tree_callback: Callable = None) -> List[Paragraph]:
         """劃分段落"""
         if chapter_index >= len(self.project.chapters):
             raise ValueError("章節索引超出範圍")
@@ -788,12 +804,17 @@ class NovelWriterCore:
                 paragraphs.append(paragraph)
             
             chapter.paragraphs = paragraphs
+            
+            # 通知樹視圖更新
+            if tree_callback:
+                tree_callback("paragraphs_generated", {"chapter_index": chapter_index, "paragraphs": paragraphs})
+            
             return paragraphs
         
         return []
     
     @safe_execute
-    def write_paragraph(self, chapter_index: int, paragraph_index: int) -> str:
+    def write_paragraph(self, chapter_index: int, paragraph_index: int, tree_callback: Callable = None, selected_context: str = "") -> str:
         """寫作段落"""
         if chapter_index >= len(self.project.chapters):
             raise ValueError("章節索引超出範圍")
@@ -829,7 +850,16 @@ class NovelWriterCore:
 章節大綱：{json.dumps(chapter.outline, ensure_ascii=False)}
 
 當前世界設定：
-{self._get_world_context()}
+{self._get_world_context()}"""
+
+        # 如果有選中的上下文內容，加入到prompt中
+        if selected_context.strip():
+            prompt += f"""
+
+【特別參考內容】用戶選中的相關內容，請特別參考並與之保持一致：
+{selected_context.strip()}"""
+
+        prompt += f"""
 
 【重要】以下是前面已經寫好的段落內容，請勿重複，要接續往下寫：
 {self._get_previous_paragraphs_content(chapter_index, paragraph_index)}
@@ -854,6 +884,10 @@ class NovelWriterCore:
             
             # 更新世界設定
             self._update_world_building_from_content(formatted_content)
+            
+            # 通知樹視圖更新
+            if tree_callback:
+                tree_callback("paragraph_written", {"chapter_index": chapter_index, "paragraph_index": paragraph_index, "content": formatted_content})
             
             return formatted_content
         
@@ -1017,6 +1051,7 @@ class NovelWriterGUI:
         
         # 當前狀態
         self.current_action = ""
+        self.selected_context_content = ""  # 存儲選中的上下文內容
         
         # 先設置UI
         self.setup_ui()
@@ -1026,6 +1061,37 @@ class NovelWriterGUI:
         self.api_connector = APIConnector(self.project.api_config)
         self.llm_service = LLMService(self.api_connector, self.debug_log)
         self.core = NovelWriterCore(self.project, self.llm_service)
+    
+    def tree_callback(self, event_type: str, data: Any):
+        """樹視圖回調函數，處理生成階段的樹視圖更新"""
+        try:
+            if event_type == "outline_generated":
+                self.debug_log("🌳 大綱生成完成，刷新樹視圖")
+                self.root.after(0, self.refresh_tree)
+                
+            elif event_type == "chapters_generated":
+                self.debug_log(f"🌳 章節劃分完成，共{len(data)}章，刷新樹視圖")
+                self.root.after(0, self.refresh_tree)
+                
+            elif event_type == "chapter_outline_generated":
+                chapter_index = data.get("chapter_index", 0)
+                self.debug_log(f"🌳 第{chapter_index+1}章大綱生成完成，刷新樹視圖")
+                self.root.after(0, self.refresh_tree)
+                
+            elif event_type == "paragraphs_generated":
+                chapter_index = data.get("chapter_index", 0)
+                paragraphs = data.get("paragraphs", [])
+                self.debug_log(f"🌳 第{chapter_index+1}章段落劃分完成，共{len(paragraphs)}段，刷新樹視圖")
+                self.root.after(0, self.refresh_tree)
+                
+            elif event_type == "paragraph_written":
+                chapter_index = data.get("chapter_index", 0)
+                paragraph_index = data.get("paragraph_index", 0)
+                self.debug_log(f"🌳 第{chapter_index+1}章第{paragraph_index+1}段寫作完成，刷新樹視圖")
+                self.root.after(0, self.refresh_tree)
+                
+        except Exception as e:
+            self.debug_log(f"❌ 樹視圖回調處理失敗: {str(e)}")
     
     def setup_ui(self):
         """設置UI"""
@@ -1038,12 +1104,18 @@ class NovelWriterGUI:
         left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
         left_panel.pack_propagate(False)
         
+        # 中間階層樹視圖
+        tree_panel = ttk.Frame(main_frame, width=300)
+        tree_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        tree_panel.pack_propagate(False)
+        
         # 右側工作區域
         right_panel = ttk.Frame(main_frame)
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
         self.setup_left_panel(left_panel)
-        self.setup_right_panel(right_panel)
+        self.setup_right_panel(right_panel)  # 先設置右側面板，確保debug_text被初始化
+        self.setup_tree_panel(tree_panel)    # 再設置樹面板
     
     def setup_left_panel(self, parent):
         """設置左側控制面板"""
@@ -1141,6 +1213,69 @@ class NovelWriterGUI:
         ttk.Button(file_frame, text="保存項目", command=self.save_project).pack(fill=tk.X, pady=2)
         ttk.Button(file_frame, text="載入項目", command=self.load_project).pack(fill=tk.X, pady=2)
         ttk.Button(file_frame, text="導出小說", command=self.export_novel).pack(fill=tk.X, pady=2)
+    
+    def setup_tree_panel(self, parent):
+        """設置階層樹視圖面板"""
+        # 樹視圖標題
+        tree_frame = ttk.LabelFrame(parent, text="小說結構樹", padding=10)
+        tree_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 創建樹視圖
+        self.tree = ttk.Treeview(tree_frame, show="tree headings", height=20)
+        self.tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        
+        # 添加滾動條
+        tree_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.configure(yscrollcommand=tree_scrollbar.set)
+        
+        # 設置列
+        self.tree["columns"] = ("status", "words")
+        self.tree.column("#0", width=200, minwidth=150)
+        self.tree.column("status", width=80, minwidth=60)
+        self.tree.column("words", width=60, minwidth=50)
+        
+        # 設置標題
+        self.tree.heading("#0", text="內容", anchor=tk.W)
+        self.tree.heading("status", text="狀態", anchor=tk.CENTER)
+        self.tree.heading("words", text="字數", anchor=tk.CENTER)
+        
+        # 綁定事件
+        self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
+        self.tree.bind("<Double-1>", self.on_tree_double_click)
+        
+        # 右鍵菜單
+        self.tree_menu = tk.Menu(self.tree, tearoff=0)
+        self.tree_menu.add_command(label="編輯內容", command=self.edit_selected_content)
+        self.tree_menu.add_command(label="重新生成", command=self.regenerate_selected_content)
+        self.tree_menu.add_separator()
+        self.tree_menu.add_command(label="添加章節", command=self.add_chapter_node)
+        self.tree_menu.add_command(label="添加段落", command=self.add_paragraph_node)
+        self.tree_menu.add_command(label="刪除節點", command=self.delete_selected_node)
+        self.tree_menu.add_separator()
+        self.tree_menu.add_command(label="展開全部", command=self.expand_all_tree)
+        self.tree_menu.add_command(label="收起全部", command=self.collapse_all_tree)
+        
+        self.tree.bind("<Button-3>", self.show_tree_menu)
+        
+        # 操作按鈕框架
+        button_frame = ttk.Frame(tree_frame)
+        button_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        ttk.Button(button_frame, text="刷新樹", command=self.refresh_tree).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="編輯", command=self.edit_selected_content).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="重新生成", command=self.regenerate_selected_content).pack(side=tk.LEFT)
+        
+        # 手動操作按鈕
+        manual_frame = ttk.Frame(tree_frame)
+        manual_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        ttk.Button(manual_frame, text="添加章節", command=self.add_chapter_node).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(manual_frame, text="添加段落", command=self.add_paragraph_node).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(manual_frame, text="刪除節點", command=self.delete_selected_node).pack(side=tk.LEFT)
+        
+        # 初始化預設樹結構
+        self.initialize_default_tree()
     
     def setup_right_panel(self, parent):
         """設置右側工作區域"""
@@ -1307,17 +1442,20 @@ class NovelWriterGUI:
         self.project.title = self.title_entry.get().strip()
         self.project.theme = self.theme_entry.get().strip()
         
+        # 保存額外指示到項目數據中
+        self.project.outline_additional_prompt = self.outline_prompt_entry.get("1.0", tk.END).strip()
+        
         def run_task():
             try:
                 self.current_action = "正在生成大綱..."
                 self.debug_log("🚀 開始生成大綱")
                 
                 # 獲取額外的prompt指示
-                additional_prompt = self.outline_prompt_entry.get("1.0", tk.END).strip()
+                additional_prompt = self.project.outline_additional_prompt
                 if additional_prompt:
                     self.debug_log(f"📝 使用額外指示: {additional_prompt}")
                 
-                result = self.core.generate_outline(additional_prompt)
+                result = self.core.generate_outline(additional_prompt, self.tree_callback)
                 
                 if result:
                     self.content_text.delete(1.0, tk.END)
@@ -1343,17 +1481,20 @@ class NovelWriterGUI:
             messagebox.showerror("錯誤", "請先生成大綱")
             return
         
+        # 保存額外指示到項目數據中
+        self.project.chapters_additional_prompt = self.chapters_prompt_entry.get("1.0", tk.END).strip()
+        
         def run_task():
             try:
                 self.current_action = "正在劃分章節..."
                 self.debug_log("🚀 開始劃分章節")
                 
                 # 獲取額外的prompt指示
-                additional_prompt = self.chapters_prompt_entry.get("1.0", tk.END).strip()
+                additional_prompt = self.project.chapters_additional_prompt
                 if additional_prompt:
                     self.debug_log(f"📝 使用額外指示: {additional_prompt}")
                 
-                chapters = self.core.divide_chapters(additional_prompt)
+                chapters = self.core.divide_chapters(additional_prompt, self.tree_callback)
                 
                 if chapters:
                     self.update_chapter_list()
@@ -1456,7 +1597,7 @@ class NovelWriterGUI:
                 self.current_action = f"正在寫作第{chapter_index+1}章第{paragraph_index+1}段..."
                 self.debug_log(f"🚀 開始寫作第{chapter_index+1}章第{paragraph_index+1}段")
                 
-                content = self.core.write_paragraph(chapter_index, paragraph_index)
+                content = self.core.write_paragraph(chapter_index, paragraph_index, self.tree_callback, self.selected_context_content)
                 
                 if content:
                     self.root.after(0, lambda: self.display_paragraph_content(content))
@@ -1541,6 +1682,8 @@ class NovelWriterGUI:
                     "title": self.project.title,
                     "theme": self.project.theme,
                     "outline": self.project.outline,
+                    "outline_additional_prompt": self.project.outline_additional_prompt,
+                    "chapters_additional_prompt": self.project.chapters_additional_prompt,
                     "chapters": chapters_data,
                     "world_building": asdict(self.project.world_building)
                 }
@@ -1570,6 +1713,8 @@ class NovelWriterGUI:
                 self.project.title = project_data.get("title", "")
                 self.project.theme = project_data.get("theme", "")
                 self.project.outline = project_data.get("outline", "")
+                self.project.outline_additional_prompt = project_data.get("outline_additional_prompt", "")
+                self.project.chapters_additional_prompt = project_data.get("chapters_additional_prompt", "")
                 
                 # 重建章節數據
                 self.project.chapters = []
@@ -1620,12 +1765,21 @@ class NovelWriterGUI:
                 self.theme_entry.delete(0, tk.END)
                 self.theme_entry.insert(0, self.project.theme)
                 
+                # 更新額外指示輸入框
+                self.outline_prompt_entry.delete("1.0", tk.END)
+                self.outline_prompt_entry.insert("1.0", self.project.outline_additional_prompt)
+                self.chapters_prompt_entry.delete("1.0", tk.END)
+                self.chapters_prompt_entry.insert("1.0", self.project.chapters_additional_prompt)
+                
                 if self.project.outline:
                     self.content_text.delete(1.0, tk.END)
                     self.content_text.insert(tk.END, self.project.outline)
                 
                 self.update_chapter_list()
                 self.update_world_display()
+                
+                # 重要：載入項目後刷新樹狀圖
+                self.refresh_tree()
                 
                 self.debug_log(f"✅ 項目已載入: {filename}")
                 messagebox.showinfo("成功", "項目載入成功！")
@@ -1710,19 +1864,26 @@ class NovelWriterGUI:
                     self.debug_log(f"🚀 為第{chapter_index+1}章生成大綱和段落")
                     
                     try:
+                        # 標記章節為進行中狀態
+                        chapter.status = CreationStatus.IN_PROGRESS
+                        self.root.after(0, self.refresh_tree)
+                        
                         # 生成章節大綱
-                        self.core.generate_chapter_outline(chapter_index)
+                        self.core.generate_chapter_outline(chapter_index, self.tree_callback)
                         
                         # 劃分段落
-                        self.core.divide_paragraphs(chapter_index)
+                        self.core.divide_paragraphs(chapter_index, self.tree_callback)
                         
-                        # 更新UI
+                        # 更新UI和樹狀圖
                         if chapter_index == self.chapter_combo.current():
                             self.root.after(0, self.update_paragraph_list)
+                        self.root.after(0, self.refresh_tree)
                         
                         self.debug_log(f"✅ 第{chapter_index+1}章準備完成")
                         
                     except Exception as e:
+                        chapter.status = CreationStatus.ERROR
+                        self.root.after(0, self.refresh_tree)
                         self.debug_log(f"❌ 準備第{chapter_index+1}章時發生錯誤: {str(e)}")
                         continue
                 
@@ -1739,6 +1900,10 @@ class NovelWriterGUI:
                     self.root.after(0, lambda ci=chapter_index, pi=paragraph_index: 
                                    self.progress_var.set(f"寫作第{ci+1}章第{pi+1}段"))
                     
+                    # 標記段落為進行中狀態並更新樹狀圖
+                    paragraph.status = CreationStatus.IN_PROGRESS
+                    self.root.after(0, self.refresh_tree)
+                    
                     # 段落寫作重試機制
                     paragraph_retry_max = 2  # 段落寫作重試次數
                     paragraph_success = False
@@ -1754,7 +1919,7 @@ class NovelWriterGUI:
                                 self.debug_log(f"🚀 自動寫作第{chapter_index+1}章第{paragraph_index+1}段")
                             
                             # 寫作段落
-                            content = self.core.write_paragraph(chapter_index, paragraph_index)
+                            content = self.core.write_paragraph(chapter_index, paragraph_index, self.tree_callback)
                             
                             if content:
                                 # 如果是當前選中的章節和段落，更新顯示
@@ -1768,6 +1933,9 @@ class NovelWriterGUI:
                                 
                                 # 更新世界設定
                                 self.root.after(0, self.update_world_display)
+                                
+                                # 立即更新樹狀圖以顯示完成狀態
+                                self.root.after(0, self.refresh_tree)
                                 
                                 self.debug_log(f"✅ 第{chapter_index+1}章第{paragraph_index+1}段自動寫作完成")
                                 paragraph_success = True
@@ -1783,12 +1951,14 @@ class NovelWriterGUI:
                                     self.debug_log(f"⚠️ 第{chapter_index+1}章第{paragraph_index+1}段重試次數已用盡，跳過此段落")
                                     # 標記段落為錯誤狀態
                                     paragraph.status = CreationStatus.ERROR
+                                    self.root.after(0, self.refresh_tree)
                                 
                         except JSONParseException as e:
                             self.debug_log(f"❌ 第{chapter_index+1}章第{paragraph_index+1}段JSON解析失敗: {str(e)}")
                             if retry_attempt == paragraph_retry_max - 1:
                                 self.debug_log(f"⚠️ 第{chapter_index+1}章第{paragraph_index+1}段JSON解析重試次數已用盡，跳過此段落")
                                 paragraph.status = CreationStatus.ERROR
+                                self.root.after(0, self.refresh_tree)
                             else:
                                 # JSON解析失敗時稍微延遲再重試
                                 import time
@@ -1799,6 +1969,7 @@ class NovelWriterGUI:
                             if retry_attempt == paragraph_retry_max - 1:
                                 self.debug_log(f"⚠️ 第{chapter_index+1}章第{paragraph_index+1}段API重試次數已用盡，跳過此段落")
                                 paragraph.status = CreationStatus.ERROR
+                                self.root.after(0, self.refresh_tree)
                             else:
                                 # API失敗時延遲更長時間再重試
                                 import time
@@ -1809,13 +1980,30 @@ class NovelWriterGUI:
                             if retry_attempt == paragraph_retry_max - 1:
                                 self.debug_log(f"⚠️ 第{chapter_index+1}章第{paragraph_index+1}段重試次數已用盡，跳過此段落")
                                 paragraph.status = CreationStatus.ERROR
+                                self.root.after(0, self.refresh_tree)
                             else:
                                 import time
                                 time.sleep(2)
                     
-                    # 如果段落寫作失敗，更新段落列表以顯示錯誤狀態
-                    if not paragraph_success and chapter_index == self.chapter_combo.current():
-                        self.root.after(0, self.update_paragraph_list)
+                    # 如果段落寫作失敗，更新段落列表和樹狀圖以顯示錯誤狀態
+                    if not paragraph_success:
+                        if chapter_index == self.chapter_combo.current():
+                            self.root.after(0, self.update_paragraph_list)
+                        self.root.after(0, self.refresh_tree)
+                
+                # 檢查章節是否完成
+                chapter_completed = all(p.status == CreationStatus.COMPLETED for p in chapter.paragraphs)
+                if chapter_completed:
+                    chapter.status = CreationStatus.COMPLETED
+                    self.debug_log(f"🎉 第{chapter_index+1}章全部完成！")
+                elif any(p.status == CreationStatus.ERROR for p in chapter.paragraphs):
+                    chapter.status = CreationStatus.ERROR
+                    self.debug_log(f"⚠️ 第{chapter_index+1}章包含錯誤段落")
+                else:
+                    chapter.status = CreationStatus.IN_PROGRESS
+                
+                # 更新樹狀圖以顯示章節狀態
+                self.root.after(0, self.refresh_tree)
                 
                 # 章節完成後的延遲
                 if self.auto_writing and chapter_index < len(self.project.chapters) - 1:
@@ -1827,6 +2015,7 @@ class NovelWriterGUI:
                 self.auto_writing = False
                 self.root.after(0, lambda: self.auto_button.config(text="開始自動寫作", style=""))
                 self.root.after(0, lambda: self.progress_var.set("自動寫作完成！"))
+                self.root.after(0, self.refresh_tree)  # 最終更新樹狀圖
                 self.debug_log("🎉 自動寫作全部完成！")
                 self.root.after(0, lambda: messagebox.showinfo("完成", "自動寫作已完成！"))
                 
@@ -1835,6 +2024,7 @@ class NovelWriterGUI:
             self.auto_writing = False
             self.root.after(0, lambda: self.auto_button.config(text="開始自動寫作", style=""))
             self.root.after(0, lambda: self.progress_var.set("自動寫作出錯"))
+            self.root.after(0, self.refresh_tree)  # 出錯時也更新樹狀圖
     
     def get_writing_progress(self):
         """獲取寫作進度"""
@@ -1853,6 +2043,715 @@ class NovelWriterGUI:
         progress_percent = (completed_paragraphs / total_paragraphs * 100) if total_paragraphs > 0 else 0
         
         return completed_paragraphs, total_paragraphs, progress_percent
+    
+    # 階層樹視圖相關方法
+    def refresh_tree(self):
+        """刷新階層樹視圖"""
+        # 清空樹
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        if not self.project.title:
+            return
+        
+        # 添加根節點（小說標題）
+        root_node = self.tree.insert("", "end", text=f"📖 {self.project.title}", 
+                                     values=("", ""), tags=("root",))
+        
+        # 添加大綱節點
+        if self.project.outline:
+            outline_node = self.tree.insert(root_node, "end", text="📋 整體大綱", 
+                                           values=("已完成", len(self.project.outline)), 
+                                           tags=("outline",))
+        
+        # 添加章節節點
+        for i, chapter in enumerate(self.project.chapters):
+            chapter_status = chapter.status.value if hasattr(chapter, 'status') else "未開始"
+            chapter_words = sum(p.word_count for p in chapter.paragraphs)
+            
+            chapter_node = self.tree.insert(root_node, "end", 
+                                           text=f"📚 第{i+1}章: {chapter.title}", 
+                                           values=(chapter_status, chapter_words), 
+                                           tags=("chapter", f"chapter_{i}"))
+            
+            # 添加章節大綱節點
+            if chapter.outline:
+                outline_text = "📝 章節大綱"
+                self.tree.insert(chapter_node, "end", text=outline_text, 
+                               values=("已完成", len(str(chapter.outline))), 
+                               tags=("chapter_outline", f"chapter_{i}"))
+            
+            # 添加段落節點
+            for j, paragraph in enumerate(chapter.paragraphs):
+                para_status = paragraph.status.value
+                para_words = paragraph.word_count
+                
+                para_node = self.tree.insert(chapter_node, "end", 
+                                           text=f"📄 第{j+1}段: {paragraph.purpose[:20]}...", 
+                                           values=(para_status, para_words), 
+                                           tags=("paragraph", f"chapter_{i}", f"paragraph_{j}"))
+        
+        # 展開根節點
+        self.tree.item(root_node, open=True)
+        
+        # 更新樹視圖後，同步更新章節列表
+        self.update_chapter_list()
+    
+    def on_tree_select(self, event):
+        """樹視圖選擇事件"""
+        selection = self.tree.selection()
+        if not selection:
+            return
+        
+        item = selection[0]
+        tags = self.tree.item(item, "tags")
+        
+        if not tags:
+            return
+        
+        # 根據標籤類型處理選擇
+        if "outline" in tags:
+            # 選擇了整體大綱
+            self.display_content(self.project.outline, "整體大綱")
+        elif "chapter_outline" in tags:
+            # 選擇了章節大綱
+            chapter_index = self._extract_chapter_index(tags)
+            if chapter_index is not None and chapter_index < len(self.project.chapters):
+                chapter = self.project.chapters[chapter_index]
+                outline_text = json.dumps(chapter.outline, ensure_ascii=False, indent=2)
+                self.display_content(outline_text, f"第{chapter_index+1}章大綱")
+        elif "paragraph" in tags:
+            # 選擇了段落
+            chapter_index = self._extract_chapter_index(tags)
+            paragraph_index = self._extract_paragraph_index(tags)
+            if (chapter_index is not None and paragraph_index is not None and 
+                chapter_index < len(self.project.chapters) and 
+                paragraph_index < len(self.project.chapters[chapter_index].paragraphs)):
+                
+                paragraph = self.project.chapters[chapter_index].paragraphs[paragraph_index]
+                self.display_content(paragraph.content, f"第{chapter_index+1}章第{paragraph_index+1}段")
+                
+                # 同步更新下拉選擇框
+                self.chapter_combo.current(chapter_index)
+                self.update_paragraph_list()
+                self.paragraph_combo.current(paragraph_index)
+        elif "chapter" in tags:
+            # 選擇了章節
+            chapter_index = self._extract_chapter_index(tags)
+            if chapter_index is not None and chapter_index < len(self.project.chapters):
+                chapter = self.project.chapters[chapter_index]
+                
+                # 顯示章節的所有已完成段落內容
+                content_parts = []
+                for i, paragraph in enumerate(chapter.paragraphs):
+                    if paragraph.content:
+                        content_parts.append(f"=== 第{i+1}段 ===\n{paragraph.content}")
+                
+                full_content = "\n\n".join(content_parts) if content_parts else "此章節尚無內容"
+                self.display_content(full_content, f"第{chapter_index+1}章: {chapter.title}")
+                
+                # 同步更新下拉選擇框
+                self.chapter_combo.current(chapter_index)
+                self.update_paragraph_list()
+    
+    def on_tree_double_click(self, event):
+        """樹視圖雙擊事件"""
+        self.edit_selected_content()
+    
+    def show_tree_menu(self, event):
+        """顯示樹視圖右鍵菜單"""
+        item = self.tree.identify_row(event.y)
+        if item:
+            self.tree.selection_set(item)
+            self.tree_menu.post(event.x_root, event.y_root)
+    
+    def edit_selected_content(self):
+        """編輯選中的內容"""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("提示", "請先選擇要編輯的項目")
+            return
+        
+        item = selection[0]
+        tags = self.tree.item(item, "tags")
+        
+        if not tags:
+            return
+        
+        # 根據選中的項目類型打開編輯窗口
+        if "outline" in tags:
+            self._edit_outline()
+        elif "chapter_outline" in tags:
+            chapter_index = self._extract_chapter_index(tags)
+            self._edit_chapter_outline(chapter_index)
+        elif "paragraph" in tags:
+            chapter_index = self._extract_chapter_index(tags)
+            paragraph_index = self._extract_paragraph_index(tags)
+            self._edit_paragraph_content(chapter_index, paragraph_index)
+    
+    def regenerate_selected_content(self):
+        """重新生成選中的內容"""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("提示", "請先選擇要重新生成的項目")
+            return
+        
+        item = selection[0]
+        tags = self.tree.item(item, "tags")
+        
+        if not tags:
+            return
+        
+        # 確認重新生成
+        if not messagebox.askyesno("確認", "確定要重新生成選中的內容嗎？這將覆蓋現有內容。"):
+            return
+        
+        # 根據選中的項目類型重新生成
+        if "chapter_outline" in tags:
+            chapter_index = self._extract_chapter_index(tags)
+            self._regenerate_chapter_outline(chapter_index)
+        elif "paragraph" in tags:
+            chapter_index = self._extract_chapter_index(tags)
+            paragraph_index = self._extract_paragraph_index(tags)
+            self._regenerate_paragraph(chapter_index, paragraph_index)
+    
+    def expand_all_tree(self):
+        """展開所有樹節點"""
+        def expand_item(item):
+            self.tree.item(item, open=True)
+            for child in self.tree.get_children(item):
+                expand_item(child)
+        
+        for item in self.tree.get_children():
+            expand_item(item)
+    
+    def collapse_all_tree(self):
+        """收起所有樹節點"""
+        def collapse_item(item):
+            self.tree.item(item, open=False)
+            for child in self.tree.get_children(item):
+                collapse_item(child)
+        
+        for item in self.tree.get_children():
+            collapse_item(item)
+    
+    def display_content(self, content, title):
+        """在內容編輯區顯示內容"""
+        self.content_text.delete(1.0, tk.END)
+        self.content_text.insert(tk.END, content)
+        self.notebook.select(0)  # 切換到內容編輯頁面
+        
+        # 更新選中的上下文內容
+        self.selected_context_content = content
+        
+        self.debug_log(f"📖 顯示內容: {title}")
+        self.debug_log(f"🎯 已設定選中內容作為下次生成的參考上下文")
+    
+    def _extract_chapter_index(self, tags):
+        """從標籤中提取章節索引"""
+        for tag in tags:
+            if tag.startswith("chapter_"):
+                try:
+                    return int(tag.split("_")[1])
+                except (IndexError, ValueError):
+                    pass
+        return None
+    
+    def _extract_paragraph_index(self, tags):
+        """從標籤中提取段落索引"""
+        for tag in tags:
+            if tag.startswith("paragraph_"):
+                try:
+                    return int(tag.split("_")[1])
+                except (IndexError, ValueError):
+                    pass
+        return None
+    
+    def _edit_outline(self):
+        """編輯整體大綱"""
+        edit_window = tk.Toplevel(self.root)
+        edit_window.title("編輯整體大綱")
+        edit_window.geometry("800x600")
+        edit_window.transient(self.root)
+        
+        # 創建文本編輯區
+        text_frame = ttk.Frame(edit_window)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        text_widget = scrolledtext.ScrolledText(text_frame, wrap=tk.WORD, font=("Microsoft YaHei", 11))
+        text_widget.pack(fill=tk.BOTH, expand=True)
+        text_widget.insert(tk.END, self.project.outline)
+        
+        # 按鈕框架
+        button_frame = ttk.Frame(edit_window)
+        button_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        
+        def save_outline():
+            new_content = text_widget.get(1.0, tk.END).strip()
+            self.project.outline = new_content
+            self.refresh_tree()
+            self.debug_log("✅ 整體大綱已更新")
+            edit_window.destroy()
+        
+        def cancel_edit():
+            edit_window.destroy()
+        
+        ttk.Button(button_frame, text="保存", command=save_outline).pack(side=tk.RIGHT, padx=(5, 0))
+        ttk.Button(button_frame, text="取消", command=cancel_edit).pack(side=tk.RIGHT)
+    
+    def _edit_chapter_outline(self, chapter_index):
+        """編輯章節大綱"""
+        if chapter_index is None or chapter_index >= len(self.project.chapters):
+            return
+        
+        chapter = self.project.chapters[chapter_index]
+        
+        edit_window = tk.Toplevel(self.root)
+        edit_window.title(f"編輯第{chapter_index+1}章大綱")
+        edit_window.geometry("800x600")
+        edit_window.transient(self.root)
+        
+        # 創建文本編輯區
+        text_frame = ttk.Frame(edit_window)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        text_widget = scrolledtext.ScrolledText(text_frame, wrap=tk.WORD, font=("Microsoft YaHei", 11))
+        text_widget.pack(fill=tk.BOTH, expand=True)
+        
+        outline_text = json.dumps(chapter.outline, ensure_ascii=False, indent=2)
+        text_widget.insert(tk.END, outline_text)
+        
+        # 按鈕框架
+        button_frame = ttk.Frame(edit_window)
+        button_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        
+        def save_outline():
+            new_content = text_widget.get(1.0, tk.END).strip()
+            try:
+                # 嘗試解析為JSON
+                chapter.outline = json.loads(new_content)
+                self.refresh_tree()
+                self.debug_log(f"✅ 第{chapter_index+1}章大綱已更新")
+                edit_window.destroy()
+            except json.JSONDecodeError:
+                messagebox.showerror("錯誤", "大綱格式不正確，請確保是有效的JSON格式")
+        
+        def cancel_edit():
+            edit_window.destroy()
+        
+        ttk.Button(button_frame, text="保存", command=save_outline).pack(side=tk.RIGHT, padx=(5, 0))
+        ttk.Button(button_frame, text="取消", command=cancel_edit).pack(side=tk.RIGHT)
+    
+    def _edit_paragraph_content(self, chapter_index, paragraph_index):
+        """編輯段落內容"""
+        if (chapter_index is None or paragraph_index is None or 
+            chapter_index >= len(self.project.chapters) or 
+            paragraph_index >= len(self.project.chapters[chapter_index].paragraphs)):
+            return
+        
+        chapter = self.project.chapters[chapter_index]
+        paragraph = chapter.paragraphs[paragraph_index]
+        
+        edit_window = tk.Toplevel(self.root)
+        edit_window.title(f"編輯第{chapter_index+1}章第{paragraph_index+1}段")
+        edit_window.geometry("800x600")
+        edit_window.transient(self.root)
+        
+        # 創建文本編輯區
+        text_frame = ttk.Frame(edit_window)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        text_widget = scrolledtext.ScrolledText(text_frame, wrap=tk.WORD, font=("Microsoft YaHei", 12))
+        text_widget.pack(fill=tk.BOTH, expand=True)
+        text_widget.insert(tk.END, paragraph.content)
+        
+        # 按鈕框架
+        button_frame = ttk.Frame(edit_window)
+        button_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        
+        def save_content():
+            new_content = text_widget.get(1.0, tk.END).strip()
+            paragraph.content = new_content
+            paragraph.word_count = len(new_content)
+            if new_content:
+                paragraph.status = CreationStatus.COMPLETED
+            else:
+                paragraph.status = CreationStatus.NOT_STARTED
+            
+            self.refresh_tree()
+            self.update_paragraph_list()
+            self.debug_log(f"✅ 第{chapter_index+1}章第{paragraph_index+1}段內容已更新")
+            edit_window.destroy()
+        
+        def cancel_edit():
+            edit_window.destroy()
+        
+        ttk.Button(button_frame, text="保存", command=save_content).pack(side=tk.RIGHT, padx=(5, 0))
+        ttk.Button(button_frame, text="取消", command=cancel_edit).pack(side=tk.RIGHT)
+    
+    def _regenerate_chapter_outline(self, chapter_index):
+        """重新生成章節大綱"""
+        if chapter_index is None or chapter_index >= len(self.project.chapters):
+            return
+        
+        def run_task():
+            try:
+                self.debug_log(f"🔄 重新生成第{chapter_index+1}章大綱")
+                self.core.generate_chapter_outline(chapter_index)
+                self.root.after(0, self.refresh_tree)
+                self.debug_log(f"✅ 第{chapter_index+1}章大綱重新生成完成")
+            except Exception as e:
+                self.debug_log(f"❌ 重新生成第{chapter_index+1}章大綱失敗: {str(e)}")
+                self.root.after(0, lambda: messagebox.showerror("錯誤", f"重新生成失敗: {str(e)}"))
+        
+        threading.Thread(target=run_task, daemon=True).start()
+    
+    def _regenerate_paragraph(self, chapter_index, paragraph_index):
+        """重新生成段落內容"""
+        if (chapter_index is None or paragraph_index is None or 
+            chapter_index >= len(self.project.chapters) or 
+            paragraph_index >= len(self.project.chapters[chapter_index].paragraphs)):
+            return
+        
+        def run_task():
+            try:
+                self.debug_log(f"🔄 重新生成第{chapter_index+1}章第{paragraph_index+1}段")
+                content = self.core.write_paragraph(chapter_index, paragraph_index)
+                if content:
+                    self.root.after(0, self.refresh_tree)
+                    self.root.after(0, self.update_paragraph_list)
+                    self.root.after(0, self.update_world_display)
+                    self.debug_log(f"✅ 第{chapter_index+1}章第{paragraph_index+1}段重新生成完成")
+                else:
+                    self.debug_log(f"❌ 第{chapter_index+1}章第{paragraph_index+1}段重新生成失敗")
+            except Exception as e:
+                self.debug_log(f"❌ 重新生成第{chapter_index+1}章第{paragraph_index+1}段失敗: {str(e)}")
+                self.root.after(0, lambda: messagebox.showerror("錯誤", f"重新生成失敗: {str(e)}"))
+        
+        threading.Thread(target=run_task, daemon=True).start()
+    
+    def initialize_default_tree(self):
+        """初始化預設樹結構"""
+        # 清空樹
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        # 創建預設根節點
+        project_title = self.project.title if self.project.title else "新小說項目"
+        root_node = self.tree.insert("", "end", text=f"📖 {project_title}", 
+                                     values=("未開始", "0"), tags=("root",))
+        
+        # 創建預設大綱節點
+        outline_node = self.tree.insert(root_node, "end", text="📋 整體大綱", 
+                                       values=("未開始", "0"), tags=("outline",))
+        
+        # 創建預設章節節點（3個示例章節）
+        for i in range(3):
+            chapter_node = self.tree.insert(root_node, "end", 
+                                           text=f"📚 第{i+1}章: 待定", 
+                                           values=("未開始", "0"), 
+                                           tags=("chapter", f"chapter_{i}"))
+            
+            # 為每個章節添加預設大綱節點
+            self.tree.insert(chapter_node, "end", text="📝 章節大綱", 
+                           values=("未開始", "0"), 
+                           tags=("chapter_outline", f"chapter_{i}"))
+            
+            # 為每個章節添加預設段落節點（3個示例段落）
+            for j in range(3):
+                self.tree.insert(chapter_node, "end", 
+                               text=f"📄 第{j+1}段: 待定", 
+                               values=("未開始", "0"), 
+                               tags=("paragraph", f"chapter_{i}", f"paragraph_{j}"))
+        
+        # 展開根節點
+        self.tree.item(root_node, open=True)
+        
+        self.debug_log("🌳 預設樹結構已初始化")
+    
+    def add_chapter_node(self):
+        """添加章節節點"""
+        selection = self.tree.selection()
+        if not selection:
+            # 如果沒有選中項目，添加到根節點
+            root_items = self.tree.get_children()
+            if root_items:
+                parent_item = root_items[0]  # 根節點
+            else:
+                messagebox.showerror("錯誤", "找不到根節點")
+                return
+        else:
+            item = selection[0]
+            tags = self.tree.item(item, "tags")
+            
+            # 只能在根節點下添加章節
+            if "root" in tags:
+                parent_item = item
+            else:
+                # 找到根節點
+                root_items = self.tree.get_children()
+                if root_items:
+                    parent_item = root_items[0]
+                else:
+                    messagebox.showerror("錯誤", "找不到根節點")
+                    return
+        
+        # 計算新章節的索引
+        chapter_count = 0
+        for child in self.tree.get_children(parent_item):
+            child_tags = self.tree.item(child, "tags")
+            if any(tag.startswith("chapter_") for tag in child_tags):
+                chapter_count += 1
+        
+        # 彈出對話框讓用戶輸入章節標題
+        title = tk.simpledialog.askstring("添加章節", "請輸入章節標題:", 
+                                         initialvalue=f"第{chapter_count+1}章")
+        if not title:
+            return
+        
+        # 添加章節節點
+        chapter_node = self.tree.insert(parent_item, "end", 
+                                       text=f"📚 {title}", 
+                                       values=("未開始", "0"), 
+                                       tags=("chapter", f"chapter_{chapter_count}"))
+        
+        # 添加章節大綱節點
+        self.tree.insert(chapter_node, "end", text="📝 章節大綱", 
+                       values=("未開始", "0"), 
+                       tags=("chapter_outline", f"chapter_{chapter_count}"))
+        
+        # 添加預設段落節點
+        for j in range(3):
+            self.tree.insert(chapter_node, "end", 
+                           text=f"📄 第{j+1}段: 待定", 
+                           values=("未開始", "0"), 
+                           tags=("paragraph", f"chapter_{chapter_count}", f"paragraph_{j}"))
+        
+        # 同時在項目數據中添加章節
+        if chapter_count >= len(self.project.chapters):
+            new_chapter = Chapter(
+                title=title,
+                summary="",
+                estimated_words=3000
+            )
+            # 添加預設段落
+            for j in range(3):
+                paragraph = Paragraph(
+                    order=j,
+                    purpose=f"第{j+1}段內容",
+                    estimated_words=400
+                )
+                new_chapter.paragraphs.append(paragraph)
+            
+            self.project.chapters.append(new_chapter)
+        
+        self.debug_log(f"✅ 已添加章節: {title}")
+        self.update_chapter_list()
+    
+    def add_paragraph_node(self):
+        """添加段落節點"""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("提示", "請先選擇一個章節")
+            return
+        
+        item = selection[0]
+        tags = self.tree.item(item, "tags")
+        
+        # 確定父章節
+        chapter_index = None
+        if "chapter" in tags:
+            parent_item = item
+            chapter_index = self._extract_chapter_index(tags)
+        elif "paragraph" in tags or "chapter_outline" in tags:
+            parent_item = self.tree.parent(item)
+            parent_tags = self.tree.item(parent_item, "tags")
+            chapter_index = self._extract_chapter_index(parent_tags)
+        else:
+            messagebox.showwarning("提示", "請選擇章節或段落節點")
+            return
+        
+        if chapter_index is None:
+            messagebox.showerror("錯誤", "無法確定章節索引")
+            return
+        
+        # 計算新段落的索引
+        paragraph_count = 0
+        for child in self.tree.get_children(parent_item):
+            child_tags = self.tree.item(child, "tags")
+            if "paragraph" in child_tags:
+                paragraph_count += 1
+        
+        # 彈出對話框讓用戶輸入段落目的
+        purpose = tk.simpledialog.askstring("添加段落", "請輸入段落目的:", 
+                                           initialvalue=f"第{paragraph_count+1}段內容")
+        if not purpose:
+            return
+        
+        # 添加段落節點
+        para_node = self.tree.insert(parent_item, "end", 
+                                   text=f"📄 第{paragraph_count+1}段: {purpose[:20]}...", 
+                                   values=("未開始", "0"), 
+                                   tags=("paragraph", f"chapter_{chapter_index}", f"paragraph_{paragraph_count}"))
+        
+        # 同時在項目數據中添加段落
+        if chapter_index < len(self.project.chapters):
+            chapter = self.project.chapters[chapter_index]
+            if paragraph_count >= len(chapter.paragraphs):
+                new_paragraph = Paragraph(
+                    order=paragraph_count,
+                    purpose=purpose,
+                    estimated_words=400
+                )
+                chapter.paragraphs.append(new_paragraph)
+        
+        self.debug_log(f"✅ 已添加段落: {purpose}")
+        self.update_paragraph_list()
+    
+    def delete_selected_node(self):
+        """刪除選中的節點"""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("提示", "請先選擇要刪除的節點")
+            return
+        
+        item = selection[0]
+        tags = self.tree.item(item, "tags")
+        item_text = self.tree.item(item, "text")
+        
+        # 不允許刪除根節點和整體大綱
+        if "root" in tags:
+            messagebox.showwarning("提示", "不能刪除根節點")
+            return
+        
+        if "outline" in tags and "chapter_outline" not in tags:
+            messagebox.showwarning("提示", "不能刪除整體大綱節點")
+            return
+        
+        # 確認刪除
+        if not messagebox.askyesno("確認刪除", f"確定要刪除「{item_text}」嗎？\n此操作不可撤銷。"):
+            return
+        
+        # 根據節點類型進行刪除
+        if "chapter" in tags and "chapter_outline" not in tags:
+            # 刪除章節
+            chapter_index = self._extract_chapter_index(tags)
+            if chapter_index is not None and chapter_index < len(self.project.chapters):
+                del self.project.chapters[chapter_index]
+                self.debug_log(f"✅ 已刪除章節: {item_text}")
+                
+                # 重新整理章節索引
+                self._reindex_chapters()
+                
+        elif "paragraph" in tags:
+            # 刪除段落
+            chapter_index = self._extract_chapter_index(tags)
+            paragraph_index = self._extract_paragraph_index(tags)
+            if (chapter_index is not None and paragraph_index is not None and 
+                chapter_index < len(self.project.chapters) and 
+                paragraph_index < len(self.project.chapters[chapter_index].paragraphs)):
+                
+                del self.project.chapters[chapter_index].paragraphs[paragraph_index]
+                self.debug_log(f"✅ 已刪除段落: {item_text}")
+                
+                # 重新整理段落索引
+                self._reindex_paragraphs(chapter_index)
+        
+        elif "chapter_outline" in tags:
+            # 刪除章節大綱（清空大綱內容）
+            chapter_index = self._extract_chapter_index(tags)
+            if chapter_index is not None and chapter_index < len(self.project.chapters):
+                self.project.chapters[chapter_index].outline = {}
+                self.debug_log(f"✅ 已清空第{chapter_index+1}章大綱")
+        
+        # 刪除樹節點
+        self.tree.delete(item)
+        
+        # 更新相關UI
+        self.update_chapter_list()
+        self.update_paragraph_list()
+    
+    def _reindex_chapters(self):
+        """重新整理章節索引"""
+        # 更新樹視圖中的章節標籤
+        root_items = self.tree.get_children()
+        if not root_items:
+            return
+        
+        root_item = root_items[0]
+        chapter_nodes = []
+        
+        for child in self.tree.get_children(root_item):
+            child_tags = self.tree.item(child, "tags")
+            if any(tag.startswith("chapter_") for tag in child_tags):
+                chapter_nodes.append(child)
+        
+        # 重新設置章節標籤
+        for i, chapter_node in enumerate(chapter_nodes):
+            old_tags = list(self.tree.item(chapter_node, "tags"))
+            new_tags = []
+            for tag in old_tags:
+                if tag.startswith("chapter_"):
+                    new_tags.append(f"chapter_{i}")
+                else:
+                    new_tags.append(tag)
+            
+            self.tree.item(chapter_node, tags=tuple(new_tags))
+            
+            # 更新子節點的標籤
+            for child in self.tree.get_children(chapter_node):
+                child_tags = list(self.tree.item(child, "tags"))
+                updated_child_tags = []
+                for tag in child_tags:
+                    if tag.startswith("chapter_"):
+                        updated_child_tags.append(f"chapter_{i}")
+                    else:
+                        updated_child_tags.append(tag)
+                
+                self.tree.item(child, tags=tuple(updated_child_tags))
+    
+    def _reindex_paragraphs(self, chapter_index):
+        """重新整理指定章節的段落索引"""
+        root_items = self.tree.get_children()
+        if not root_items:
+            return
+        
+        root_item = root_items[0]
+        chapter_node = None
+        
+        # 找到對應的章節節點
+        for child in self.tree.get_children(root_item):
+            child_tags = self.tree.item(child, "tags")
+            if f"chapter_{chapter_index}" in child_tags:
+                chapter_node = child
+                break
+        
+        if not chapter_node:
+            return
+        
+        # 重新整理段落索引
+        paragraph_nodes = []
+        for child in self.tree.get_children(chapter_node):
+            child_tags = self.tree.item(child, "tags")
+            if "paragraph" in child_tags:
+                paragraph_nodes.append(child)
+        
+        # 重新設置段落標籤和order
+        for i, para_node in enumerate(paragraph_nodes):
+            old_tags = list(self.tree.item(para_node, "tags"))
+            new_tags = []
+            for tag in old_tags:
+                if tag.startswith("paragraph_"):
+                    new_tags.append(f"paragraph_{i}")
+                else:
+                    new_tags.append(tag)
+            
+            self.tree.item(para_node, tags=tuple(new_tags))
+            
+            # 更新項目數據中的段落order
+            if (chapter_index < len(self.project.chapters) and 
+                i < len(self.project.chapters[chapter_index].paragraphs)):
+                self.project.chapters[chapter_index].paragraphs[i].order = i
 
 
 def main():
