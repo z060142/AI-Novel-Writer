@@ -1882,7 +1882,7 @@ class NovelWriterGUI:
                     config_data = json.load(f)
                     
                 self.project.api_config.base_url = config_data.get("base_url", "https://api.openai.com/v1")
-                self.project.api_config.model = config_data.get("model", "gpt-4")
+                self.project.api_config.model = config_data.get("model", "gpt-4.1-mini-2025-04-14")
                 self.project.api_config.provider = config_data.get("provider", "openai")
                 self.project.api_config.api_key = config_data.get("api_key", "")
                 self.project.api_config.max_retries = config_data.get("max_retries", 3)
@@ -2003,25 +2003,25 @@ class NovelWriterGUI:
             "ollama": {
                 "provider": "custom",
                 "base_url": "http://localhost:11434/v1",
-                "model": "llama3.1:8b",
+                "model": "gemma3:12b-it-qat",
                 "description": "Ollama 本地模型服務"
             },
             "openai": {
                 "provider": "openai",
                 "base_url": "https://api.openai.com/v1",
-                "model": "gpt-4",
+                "model": "gpt-4.1-mini-2025-04-14",
                 "description": "OpenAI 官方服務"
             },
             "anthropic": {
                 "provider": "anthropic",
                 "base_url": "https://api.anthropic.com",
-                "model": "claude-3-sonnet-20240229",
+                "model": "claude-sonnet-4-20250514",
                 "description": "Anthropic Claude 服務"
             },
             "openrouter": {
                 "provider": "custom",
                 "base_url": "https://openrouter.ai/api/v1",
-                "model": "anthropic/claude-3-sonnet",
+                "model": "deepseek/deepseek-chat-v3-0324",
                 "description": "OpenRouter 聚合服務"
             }
         }
