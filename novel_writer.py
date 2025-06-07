@@ -1901,7 +1901,7 @@ class NovelWriterGUI:
         """配置API"""
         config_window = tk.Toplevel(self.root)
         config_window.title("API配置")
-        config_window.geometry("450x450")
+        config_window.geometry("500x550")
         config_window.transient(self.root)
         config_window.grab_set()
         
@@ -1909,8 +1909,18 @@ class NovelWriterGUI:
         ttk.Label(config_window, text="API提供商:").pack(anchor=tk.W, padx=10, pady=5)
         provider_var = tk.StringVar(value=self.project.api_config.provider)
         provider_combo = ttk.Combobox(config_window, textvariable=provider_var,
-                                     values=["openai", "anthropic", "custom"])
+                                     values=["openai", "anthropic", "ollama", "lm-studio", "localai", "text-generation-webui", "vllm", "custom"])
         provider_combo.pack(fill=tk.X, padx=10, pady=5)
+        
+        # 預設配置按鈕框架
+        preset_frame = ttk.Frame(config_window)
+        preset_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Label(preset_frame, text="快速預設:").pack(side=tk.LEFT)
+        ttk.Button(preset_frame, text="Ollama", command=lambda: self.apply_preset("ollama", url_var, model_var, provider_var)).pack(side=tk.LEFT, padx=(5, 2))
+        ttk.Button(preset_frame, text="OpenAI", command=lambda: self.apply_preset("openai", url_var, model_var, provider_var)).pack(side=tk.LEFT, padx=2)
+        ttk.Button(preset_frame, text="Anthropic", command=lambda: self.apply_preset("anthropic", url_var, model_var, provider_var)).pack(side=tk.LEFT, padx=2)
+        ttk.Button(preset_frame, text="Openrouter", command=lambda: self.apply_preset("openrouter", url_var, model_var, provider_var)).pack(side=tk.LEFT, padx=2)
         
         # API地址
         ttk.Label(config_window, text="API地址:").pack(anchor=tk.W, padx=10, pady=5)
@@ -1986,6 +1996,52 @@ class NovelWriterGUI:
             config_window.destroy()
         
         ttk.Button(config_window, text="保存", command=save_config).pack(pady=20)
+    
+    def apply_preset(self, preset_type, url_var, model_var, provider_var):
+        """應用預設配置"""
+        presets = {
+            "ollama": {
+                "provider": "custom",
+                "base_url": "http://localhost:11434/v1",
+                "model": "llama3.1:8b",
+                "description": "Ollama 本地模型服務"
+            },
+            "openai": {
+                "provider": "openai",
+                "base_url": "https://api.openai.com/v1",
+                "model": "gpt-4",
+                "description": "OpenAI 官方服務"
+            },
+            "anthropic": {
+                "provider": "anthropic",
+                "base_url": "https://api.anthropic.com",
+                "model": "claude-3-sonnet-20240229",
+                "description": "Anthropic Claude 服務"
+            },
+            "openrouter": {
+                "provider": "custom",
+                "base_url": "https://openrouter.ai/api/v1",
+                "model": "anthropic/claude-3-sonnet",
+                "description": "OpenRouter 聚合服務"
+            }
+        }
+        
+        if preset_type in presets:
+            preset = presets[preset_type]
+            
+            # 更新UI控件的值
+            provider_var.set(preset["provider"])
+            url_var.set(preset["base_url"])
+            model_var.set(preset["model"])
+            
+            # 顯示提示信息
+            messagebox.showinfo("預設配置", 
+                f"已應用 {preset['description']} 的預設配置：\n\n"
+                f"API地址：{preset['base_url']}\n"
+                f"模型：{preset['model']}\n\n"
+                f"請確認設定後點擊保存。")
+            
+            self.debug_log(f"✅ 已應用 {preset['description']} 預設配置")
     
     def generate_outline(self):
         """生成大綱"""
