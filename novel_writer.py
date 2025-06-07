@@ -113,6 +113,7 @@ class WorldBuilding:
     plot_points: List[str] = None
     relationships: List[Dict] = None
     style_guide: str = ""
+    chapter_notes: List[str] = None  # 新增：章節註記，記錄各項設定出現的章節
     
     def __post_init__(self):
         if self.characters is None:
@@ -125,6 +126,8 @@ class WorldBuilding:
             self.plot_points = []
         if self.relationships is None:
             self.relationships = []
+        if self.chapter_notes is None:
+            self.chapter_notes = []
 
 @dataclass
 class GlobalWritingConfig:
@@ -728,6 +731,8 @@ class PromptManager:
         
         task_prompts = {
             TaskType.OUTLINE: """
+結構要求：
+- 字數控制在3000-8000字
 JSON格式：
 {
     "title": "標題",
@@ -735,10 +740,18 @@ JSON格式：
     "themes": ["主題1", "主題2"],
     "estimated_chapters": 數字,
     "main_characters": [{"name": "角色名", "desc": "角色描述"}],
-    "world_setting": "世界觀"
+    "world_setting": "世界觀",
+    "story_flow": "完整的故事發展軌跡 - 從起始情境如何自然演變，經歷什麼樣的變化與轉折，最終走向什麼樣的結局",
+    "key_moments": ["重要情節點1", "重要情節點2", "重要情節點3"],
+    "character_arcs": "主要角色們在故事中的成長與變化歷程",
+    "story_atmosphere": "整體故事的情感色調與氛圍營造",
+    "central_conflicts": ["核心衝突1", "核心衝突2"],
+    "story_layers": "故事的多重層次 - 表面情節與深層意涵的交織"
 }""",
             
             TaskType.CHAPTERS: """
+結構要求：
+- 字數控制在2500-6000字
 JSON格式：
 {
     "chapters": [
@@ -752,13 +765,16 @@ JSON格式：
 }""",
             
             TaskType.CHAPTER_OUTLINE: """
+結構要求：
+- 字數控制在2500-6000字
 JSON格式：
 {
     "outline": {
-        "opening": "開場描述",
-        "development": "發展部分", 
-        "climax": "高潮部分",
-        "conclusion": "結尾部分",
+        "story_spark": "這個章節的靈魂火花 - 什麼讓這段故事開始燃燒？",
+        "rhythm_flow": "情節的節拍和流動 - 故事如何呼吸、加速、放緩？", 
+        "turning_moments": "關鍵的轉折點 - 什麼時刻改變了一切？",
+        "emotional_core": "情感的核心 - 什麼感受將貫穿整個章節？",
+        "story_elements": "故事中的活躍元素 - 重要的人物、物件、場所會如何參與劇情？",
         "estimated_paragraphs": 8
     }
 }""",
@@ -769,7 +785,7 @@ JSON格式：
     "paragraphs": [
         {
             "number": 1,
-            "purpose": "段落目的",
+            "purpose": "段落目的與內容方向的完整描述",
             "estimated_words": 400
         }
     ]
@@ -1173,7 +1189,7 @@ class NovelWriterCore:
             paragraph.status = CreationStatus.COMPLETED
             
             # 更新世界設定
-            self._update_world_building_from_content(formatted_content)
+            self._update_world_building_from_content(formatted_content, chapter_index, paragraph_index)
             
             # 通知樹視圖更新
             if tree_callback:
@@ -1196,7 +1212,7 @@ class NovelWriterCore:
         if "world_setting" in outline_data:
             self.project.world_building.settings["總體世界觀"] = outline_data["world_setting"]
     
-    def _update_world_building_from_content(self, content: str):
+    def _update_world_building_from_content(self, content: str, chapter_index: int = None, paragraph_index: int = None):
         """從內容更新世界設定"""
         prompt = f"""
 分析以下段落，提取需要記錄的重要信息：
@@ -1220,12 +1236,31 @@ class NovelWriterCore:
             result = self.llm_service.call_llm_with_thinking(prompt, TaskType.WORLD_BUILDING)
             
             if result:
+                # 準備章節註記信息
+                chapter_note = ""
+                if chapter_index is not None:
+                    if chapter_index < len(self.project.chapters):
+                        chapter_title = self.project.chapters[chapter_index].title
+                        if paragraph_index is not None:
+                            chapter_note = f"第{chapter_index+1}章第{paragraph_index+1}段《{chapter_title}》"
+                        else:
+                            chapter_note = f"第{chapter_index+1}章《{chapter_title}》"
+                    else:
+                        if paragraph_index is not None:
+                            chapter_note = f"第{chapter_index+1}章第{paragraph_index+1}段"
+                        else:
+                            chapter_note = f"第{chapter_index+1}章"
+                
+                # 記錄有新增內容的標記
+                has_new_content = False
+                
                 # 更新角色
                 for char in result.get("new_characters", []):
                     name = char.get("name", "")
                     desc = char.get("desc", char.get("description", ""))
                     if name and name not in self.project.world_building.characters:
                         self.project.world_building.characters[name] = desc
+                        has_new_content = True
                 
                 # 更新場景
                 for setting in result.get("new_settings", []):
@@ -1233,6 +1268,7 @@ class NovelWriterCore:
                     desc = setting.get("desc", setting.get("description", ""))
                     if name and name not in self.project.world_building.settings:
                         self.project.world_building.settings[name] = desc
+                        has_new_content = True
                 
                 # 更新名詞
                 for term in result.get("new_terms", []):
@@ -1240,11 +1276,39 @@ class NovelWriterCore:
                     definition = term.get("def", term.get("definition", ""))
                     if term_name and term_name not in self.project.world_building.terminology:
                         self.project.world_building.terminology[term_name] = definition
+                        has_new_content = True
                 
                 # 更新情節點
                 for plot in result.get("plot_points", []):
                     if plot and plot not in self.project.world_building.plot_points:
                         self.project.world_building.plot_points.append(plot)
+                        has_new_content = True
+                
+                # 如果有新增內容且有章節信息，添加章節註記
+                if has_new_content and chapter_note:
+                    # 構建註記信息
+                    new_items = []
+                    if result.get("new_characters"):
+                        char_names = [char.get("name", "") for char in result.get("new_characters", []) if char.get("name", "")]
+                        if char_names:
+                            new_items.append(f"新增角色：{', '.join(char_names)}")
+                    
+                    if result.get("new_settings"):
+                        setting_names = [setting.get("name", "") for setting in result.get("new_settings", []) if setting.get("name", "")]
+                        if setting_names:
+                            new_items.append(f"新增場景：{', '.join(setting_names)}")
+                    
+                    if result.get("new_terms"):
+                        term_names = [term.get("term", "") for term in result.get("new_terms", []) if term.get("term", "")]
+                        if term_names:
+                            new_items.append(f"新增名詞：{', '.join(term_names)}")
+                    
+                    if result.get("plot_points"):
+                        new_items.append(f"新增情節點：{len(result.get('plot_points', []))}個")
+                    
+                    if new_items:
+                        note_content = f"{chapter_note} - {'; '.join(new_items)}"
+                        self.project.world_building.chapter_notes.append(note_content)
         
         except Exception as e:
             logger.warning(f"世界設定更新失敗: {str(e)}")
@@ -1783,6 +1847,20 @@ class NovelWriterGUI:
         world_frame = ttk.Frame(self.notebook)
         self.notebook.add(world_frame, text="世界設定")
         
+        # 世界設定控制按鈕框架
+        world_control_frame = ttk.Frame(world_frame)
+        world_control_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        ttk.Button(world_control_frame, text="保存修改", 
+                  command=self.save_world_settings).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(world_control_frame, text="重置設定", 
+                  command=self.reset_world_settings).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(world_control_frame, text="刷新顯示", 
+                  command=self.update_world_display).pack(side=tk.LEFT)
+        
+        # 添加分隔線
+        ttk.Separator(world_frame, orient='horizontal').pack(fill=tk.X, padx=5, pady=5)
+        
         self.world_text = scrolledtext.ScrolledText(world_frame, wrap=tk.WORD,
                                                    font=("Microsoft YaHei", 11))
         self.world_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -2128,9 +2206,120 @@ class NovelWriterGUI:
             content.append("=== 重要情節點 ===")
             for point in world.plot_points:
                 content.append(f"• {point}")
+            content.append("")
+        
+        if world.chapter_notes:
+            content.append("=== 章節註記 ===")
+            for note in world.chapter_notes:
+                content.append(f"• {note}")
         
         self.world_text.delete(1.0, tk.END)
         self.world_text.insert(tk.END, "\n".join(content))
+    
+    def save_world_settings(self):
+        """保存世界設定修改"""
+        try:
+            # 獲取文本框中的內容
+            content = self.world_text.get("1.0", tk.END).strip()
+            
+            if not content:
+                messagebox.showwarning("提示", "世界設定內容為空")
+                return
+            
+            # 解析文本內容並更新世界設定
+            self._parse_world_content(content)
+            
+            self.debug_log("✅ 世界設定已保存")
+            messagebox.showinfo("成功", "世界設定修改已保存！")
+            
+        except Exception as e:
+            self.debug_log(f"❌ 保存世界設定失敗: {str(e)}")
+            messagebox.showerror("錯誤", f"保存失敗: {str(e)}")
+    
+    def reset_world_settings(self):
+        """重置世界設定"""
+        if not messagebox.askyesno("確認重置", "確定要重置所有世界設定嗎？\n此操作將清空所有人物、場景、名詞等設定，且不可撤銷。"):
+            return
+        
+        try:
+            # 重置世界設定數據
+            self.project.world_building = WorldBuilding()
+            
+            # 更新顯示
+            self.update_world_display()
+            
+            self.debug_log("🔄 世界設定已重置")
+            messagebox.showinfo("成功", "世界設定已重置！")
+            
+        except Exception as e:
+            self.debug_log(f"❌ 重置世界設定失敗: {str(e)}")
+            messagebox.showerror("錯誤", f"重置失敗: {str(e)}")
+    
+    def _parse_world_content(self, content: str):
+        """解析世界設定文本內容"""
+        # 重置世界設定
+        world = WorldBuilding()
+        
+        lines = content.split('\n')
+        current_section = None
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 檢查是否是章節標題
+            if line.startswith("=== ") and line.endswith(" ==="):
+                section_name = line[4:-4].strip()
+                if section_name == "人物設定":
+                    current_section = "characters"
+                elif section_name == "場景設定":
+                    current_section = "settings"
+                elif section_name == "專有名詞":
+                    current_section = "terminology"
+                elif section_name == "重要情節點":
+                    current_section = "plot_points"
+                elif section_name == "章節註記":
+                    current_section = "chapter_notes"
+                else:
+                    current_section = None
+                continue
+            
+            # 根據當前章節解析內容
+            if current_section == "characters":
+                if ":" in line:
+                    name, desc = line.split(":", 1)
+                    world.characters[name.strip()] = desc.strip()
+            
+            elif current_section == "settings":
+                if ":" in line:
+                    name, desc = line.split(":", 1)
+                    world.settings[name.strip()] = desc.strip()
+            
+            elif current_section == "terminology":
+                if ":" in line:
+                    term, desc = line.split(":", 1)
+                    world.terminology[term.strip()] = desc.strip()
+            
+            elif current_section == "plot_points":
+                if line.startswith("• "):
+                    world.plot_points.append(line[2:].strip())
+                elif line.startswith("- "):
+                    world.plot_points.append(line[2:].strip())
+                else:
+                    world.plot_points.append(line.strip())
+            
+            elif current_section == "chapter_notes":
+                if line.startswith("• "):
+                    world.chapter_notes.append(line[2:].strip())
+                elif line.startswith("- "):
+                    world.chapter_notes.append(line[2:].strip())
+                else:
+                    world.chapter_notes.append(line.strip())
+        
+        # 更新項目的世界設定
+        self.project.world_building = world
+        self.debug_log("📝 世界設定內容解析完成")
     
     def save_project(self):
         """保存項目"""
