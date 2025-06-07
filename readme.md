@@ -12,6 +12,16 @@
 - **📚 累進式設定**：隨創作進度自動累積和管理角色、場景、名詞等設定
 - **🔍 事件追蹤功能**：自動記錄各項設定的出現章節，確保前後一致性
 
+## 🚀 安裝
+
+1. 安裝 [Python](https://www.python.org/downloads/) 3.11以上版本（記得勾選 Add to PATH）
+2. 下載解壓縮專案檔案
+3. 在專案資料夾執行：
+   ```
+   pip install -r requirements.txt
+   python novel_writer.py
+   ```
+
 ---
 
 # 📖 第一部分：創作指南
