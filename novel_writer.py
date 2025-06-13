@@ -1308,7 +1308,7 @@ class NovelWriterCore:
         """
         
         try:
-            result = self.llm_service.call_llm_with_thinking(prompt, TaskType.WORLD_BUILDING, use_planning_model=True)
+            result = self.llm_service.call_llm_with_thinking(prompt, TaskType.WORLD_BUILDING, use_planning_model=False)
             
             if result:
                 # 準備章節註記信息
