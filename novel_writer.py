@@ -64,6 +64,13 @@ class APIConfig:
     use_traditional_quotes: bool = True
     disable_thinking: bool = False
 
+    # 新增規劃模型設定
+    use_planning_model: bool = False
+    planning_base_url: str = "https://api.openai.com/v1"
+    planning_model: str = "gpt-4-turbo"
+    planning_provider: str = "openai"
+    planning_api_key: str = ""
+
 @dataclass
 class Paragraph:
     """段落數據類"""
@@ -224,24 +231,39 @@ def safe_execute(func: Callable) -> Callable:
 class APIConnector:
     """LLM API連接器 - 重構版"""
     
-    def __init__(self, config: APIConfig):
+    def __init__(self, config: APIConfig, debug_callback: Callable = None):
         self.config = config
+        self.debug_callback = debug_callback or (lambda x: None)
         
     def call_api(self, messages: List[Dict], max_tokens: int = 2000, 
-                temperature: float = 0.7) -> Dict:
+                temperature: float = 0.7, use_planning_model: bool = False) -> Dict:
         """調用LLM API with retry logic"""
+        
+        # 根據是否使用規劃模型選擇配置
+        if use_planning_model and self.config.use_planning_model:
+            provider = self.config.planning_provider
+            api_key = self.config.planning_api_key or self.config.api_key
+            base_url = self.config.planning_base_url
+            model = self.config.planning_model
+            self.debug_callback("💡 使用規劃模型進行API調用")
+        else:
+            provider = self.config.provider
+            api_key = self.config.api_key
+            base_url = self.config.base_url
+            model = self.config.model
+        
         for attempt in range(self.config.max_retries):
             try:
-                logger.info(f"API調用嘗試 {attempt + 1}/{self.config.max_retries}")
+                logger.info(f"API調用嘗試 {attempt + 1}/{self.config.max_retries} (模型: {model})")
                 
-                if self.config.provider == "openai":
-                    return self._call_openai_api(messages, max_tokens, temperature)
-                elif self.config.provider == "anthropic":
-                    return self._call_anthropic_api(messages, max_tokens, temperature)
-                elif self.config.provider == "custom":
-                    return self._call_custom_api(messages, max_tokens, temperature)
+                if provider == "openai":
+                    return self._call_openai_api(messages, max_tokens, temperature, api_key, base_url, model)
+                elif provider == "anthropic":
+                    return self._call_anthropic_api(messages, max_tokens, temperature, api_key, base_url, model)
+                elif provider == "custom":
+                    return self._call_custom_api(messages, max_tokens, temperature, api_key, base_url, model)
                 else:
-                    raise APIException(f"不支持的API提供商: {self.config.provider}")
+                    raise APIException(f"不支持的API提供商: {provider}")
                     
             except requests.exceptions.RequestException as e:
                 logger.warning(f"API調用失敗 (嘗試 {attempt + 1}): {str(e)}")
@@ -252,15 +274,15 @@ class APIConnector:
                 raise APIException(f"API調用錯誤: {str(e)}")
     
     def _call_openai_api(self, messages: List[Dict], max_tokens: int, 
-                        temperature: float) -> Dict:
+                        temperature: float, api_key: str, base_url: str, model: str) -> Dict:
         """調用OpenAI格式API"""
         headers = {
-            "Authorization": f"Bearer {self.config.api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
         data = {
-            "model": self.config.model,
+            "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature
@@ -271,7 +293,7 @@ class APIConnector:
             data["thinking"] = False
         
         response = requests.post(
-            f"{self.config.base_url}/chat/completions",
+            f"{base_url}/chat/completions",
             headers=headers,
             json=data,
             timeout=self.config.timeout
@@ -282,16 +304,16 @@ class APIConnector:
             return {
                 "content": result["choices"][0]["message"]["content"],
                 "usage": result.get("usage", {}),
-                "model": result.get("model", self.config.model)
+                "model": result.get("model", model)
             }
         else:
             raise APIException(f"API調用失敗: {response.status_code} {response.text}")
     
     def _call_anthropic_api(self, messages: List[Dict], max_tokens: int, 
-                           temperature: float) -> Dict:
+                           temperature: float, api_key: str, base_url: str, model: str) -> Dict:
         """調用Anthropic API"""
         headers = {
-            "x-api-key": self.config.api_key,
+            "x-api-key": api_key,
             "Content-Type": "application/json",
             "anthropic-version": "2023-06-01"
         }
@@ -303,7 +325,7 @@ class APIConnector:
             messages = messages[1:]
         
         data = {
-            "model": self.config.model,
+            "model": model,
             "max_tokens": max_tokens,
             "temperature": temperature,
             "messages": messages
@@ -313,7 +335,7 @@ class APIConnector:
             data["system"] = system_message
         
         response = requests.post(
-            f"{self.config.base_url}/messages",
+            f"{base_url}/messages",
             headers=headers,
             json=data,
             timeout=self.config.timeout
@@ -324,15 +346,15 @@ class APIConnector:
             return {
                 "content": result["content"][0]["text"],
                 "usage": result.get("usage", {}),
-                "model": result.get("model", self.config.model)
+                "model": result.get("model", model)
             }
         else:
             raise APIException(f"API調用失敗: {response.status_code} {response.text}")
     
     def _call_custom_api(self, messages: List[Dict], max_tokens: int, 
-                        temperature: float) -> Dict:
+                        temperature: float, api_key: str, base_url: str, model: str) -> Dict:
         """調用自訂API"""
-        return self._call_openai_api(messages, max_tokens, temperature)
+        return self._call_openai_api(messages, max_tokens, temperature, api_key, base_url, model)
 
 class TextFormatter:
     """文本格式化器"""
@@ -824,7 +846,7 @@ class LLMService:
         self.json_retry_max = 3  # JSON解析重試次數
     
     def call_llm_with_thinking(self, prompt: str, task_type: TaskType, 
-                              max_tokens: int = None) -> Optional[Dict]:
+                              max_tokens: int = None, use_planning_model: bool = False) -> Optional[Dict]:
         """使用thinking模式調用LLM，包含JSON解析重試機制"""
         if max_tokens is None:
             max_tokens = PromptManager.get_token_limit(task_type)
@@ -844,10 +866,16 @@ class LLMService:
             try:
                 self.debug_callback(f"📤 正在調用API... (JSON解析嘗試 {json_attempt + 1}/{self.json_retry_max})")
                 
-                result = self.api_connector.call_api(messages, max_tokens)
+                result = self.api_connector.call_api(messages, max_tokens, use_planning_model=use_planning_model)
                 content = result.get("content", "")
                 
                 self.debug_callback(f"✅ API調用成功，回應長度: {len(content)} 字符")
+                
+                # 嘗試提取並顯示思考內容
+                thinking_content = self._extract_thinking_content(content)
+                if thinking_content:
+                    self.debug_callback(f"🧠 思考過程:\n{thinking_content}")
+                
                 self.debug_callback(f"📝 API完整回應:\n{content}")
                 
                 json_data = JSONParser.extract_json_from_content(content)
@@ -941,6 +969,53 @@ class LLMService:
             enhanced_messages[-1]["content"] += json_emphasis
         
         return enhanced_messages
+    
+    def _extract_thinking_content(self, content: str) -> Optional[str]:
+        """從API回應中提取思考內容"""
+        try:
+            # 嘗試匹配常見的思考標記格式
+            thinking_patterns = [
+                # <thinking>...</thinking> 格式
+                (r'<thinking>(.*?)</thinking>', re.DOTALL | re.IGNORECASE),
+                # <think>...</think> 格式
+                (r'<think>(.*?)</think>', re.DOTALL | re.IGNORECASE),
+                # 【思考】...【/思考】格式
+                (r'【思考】(.*?)【/思考】', re.DOTALL),
+                # 思考：...（結束標記可能不明確）
+                (r'思考[：:](.*?)(?=\n\n|\n[^思]|$)', re.DOTALL),
+                # Thinking: ... 格式
+                (r'Thinking[：:]?(.*?)(?=\n\n|\n[^T]|$)', re.DOTALL | re.IGNORECASE),
+            ]
+            
+            for pattern, flags in thinking_patterns:
+                matches = re.findall(pattern, content, flags)
+                if matches:
+                    # 取第一個匹配的思考內容
+                    thinking_text = matches[0].strip()
+                    if thinking_text and len(thinking_text) > 10:  # 確保不是空內容
+                        return thinking_text
+            
+            # 如果沒有找到明確的思考標記，嘗試檢測可能的思考內容
+            # 查找在JSON之前的文本內容，可能包含思考過程
+            json_start = content.find('```json')
+            if json_start > 50:  # 如果JSON前有足夠的內容
+                pre_json_content = content[:json_start].strip()
+                # 檢查是否包含思考相關的關鍵詞
+                thinking_keywords = ['思考', '分析', '考慮', 'thinking', 'consider', 'analyze']
+                if any(keyword in pre_json_content.lower() for keyword in thinking_keywords):
+                    # 取最後幾段作為可能的思考內容
+                    lines = pre_json_content.split('\n')
+                    if len(lines) > 2:
+                        potential_thinking = '\n'.join(lines[-3:]).strip()
+                        if len(potential_thinking) > 20:
+                            return potential_thinking
+            
+            return None
+            
+        except Exception as e:
+            # 如果提取過程出錯，記錄但不影響主流程
+            logger.debug(f"提取思考內容時發生錯誤: {str(e)}")
+            return None
 
 class NovelWriterCore:
     """小說編寫器核心邏輯"""
@@ -998,7 +1073,7 @@ class NovelWriterCore:
 額外指示：
 {additional_prompt.strip()}"""
         
-        result = self.llm_service.call_llm_with_thinking(prompt, TaskType.OUTLINE)
+        result = self.llm_service.call_llm_with_thinking(prompt, TaskType.OUTLINE, use_planning_model=True)
         
         if result:
             self.project.outline = json.dumps(result, ensure_ascii=False, indent=2)
@@ -1033,7 +1108,7 @@ class NovelWriterCore:
 額外指示：
 {additional_prompt.strip()}"""
         
-        result = self.llm_service.call_llm_with_thinking(prompt, TaskType.CHAPTERS)
+        result = self.llm_service.call_llm_with_thinking(prompt, TaskType.CHAPTERS, use_planning_model=True)
         
         if result and "chapters" in result:
             chapters = []
@@ -1083,7 +1158,7 @@ class NovelWriterCore:
 請生成詳細的章節創作大綱。
         """
         
-        result = self.llm_service.call_llm_with_thinking(prompt, TaskType.CHAPTER_OUTLINE)
+        result = self.llm_service.call_llm_with_thinking(prompt, TaskType.CHAPTER_OUTLINE, use_planning_model=True)
         
         if result and "outline" in result:
             chapter.outline = result["outline"]
@@ -1113,7 +1188,7 @@ class NovelWriterCore:
 請將章節劃分為適當數量的段落，每段都有明確的目的和內容重點。
         """
         
-        result = self.llm_service.call_llm_with_thinking(prompt, TaskType.PARAGRAPHS)
+        result = self.llm_service.call_llm_with_thinking(prompt, TaskType.PARAGRAPHS, use_planning_model=True)
         
         if result and "paragraphs" in result:
             paragraphs = []
@@ -1174,7 +1249,7 @@ class NovelWriterCore:
         language_instruction = self._get_language_instruction(language, use_traditional_quotes)
         prompt = language_instruction + "\n\n" + prompt
         
-        result = self.llm_service.call_llm_with_thinking(prompt, TaskType.WRITING)
+        result = self.llm_service.call_llm_with_thinking(prompt, TaskType.WRITING, use_planning_model=False) # 寫作使用主要模型
         
         if result and "content" in result:
             raw_content = result["content"]
@@ -1233,7 +1308,7 @@ class NovelWriterCore:
         """
         
         try:
-            result = self.llm_service.call_llm_with_thinking(prompt, TaskType.WORLD_BUILDING)
+            result = self.llm_service.call_llm_with_thinking(prompt, TaskType.WORLD_BUILDING, use_planning_model=True)
             
             if result:
                 # 準備章節註記信息
@@ -1412,7 +1487,7 @@ class NovelWriterGUI:
         
         # 然後載入配置和初始化服務
         self.load_api_config()
-        self.api_connector = APIConnector(self.project.api_config)
+        self.api_connector = APIConnector(self.project.api_config, self.debug_log)
         self.llm_service = LLMService(self.api_connector, self.debug_log)
         self.core = NovelWriterCore(self.project, self.llm_service)
     
@@ -1880,7 +1955,8 @@ class NovelWriterGUI:
             if os.path.exists("api_config.json"):
                 with open("api_config.json", "r", encoding="utf-8") as f:
                     config_data = json.load(f)
-                    
+                
+                # 載入主要設定
                 self.project.api_config.base_url = config_data.get("base_url", "https://api.openai.com/v1")
                 self.project.api_config.model = config_data.get("model", "gpt-4.1-mini-2025-04-14")
                 self.project.api_config.provider = config_data.get("provider", "openai")
@@ -1890,6 +1966,13 @@ class NovelWriterGUI:
                 self.project.api_config.language = config_data.get("language", "zh-TW")
                 self.project.api_config.use_traditional_quotes = config_data.get("use_traditional_quotes", True)
                 self.project.api_config.disable_thinking = config_data.get("disable_thinking", False)
+
+                # 載入規劃模型設定
+                self.project.api_config.use_planning_model = config_data.get("use_planning_model", False)
+                self.project.api_config.planning_base_url = config_data.get("planning_base_url", "https://api.openai.com/v1")
+                self.project.api_config.planning_model = config_data.get("planning_model", "gpt-4-turbo")
+                self.project.api_config.planning_provider = config_data.get("planning_provider", "openai")
+                self.project.api_config.planning_api_key = config_data.get("planning_api_key", "")
                 
                 self.debug_log("✅ API配置載入成功")
             else:
@@ -1901,19 +1984,87 @@ class NovelWriterGUI:
         """配置API"""
         config_window = tk.Toplevel(self.root)
         config_window.title("API配置")
-        config_window.geometry("500x550")
+        config_window.geometry("550x650") # 增加高度以容納新選項
         config_window.transient(self.root)
         config_window.grab_set()
-        
+
+        # 主框架
+        main_frame = ttk.Frame(config_window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # 創建Notebook
+        notebook = ttk.Notebook(main_frame)
+        notebook.pack(fill=tk.BOTH, expand=True)
+
+        # --- 主要模型標籤頁 ---
+        main_model_frame = ttk.Frame(notebook)
+        notebook.add(main_model_frame, text="主要模型 (用於寫作)")
+
         # API提供商
-        ttk.Label(config_window, text="API提供商:").pack(anchor=tk.W, padx=10, pady=5)
+        ttk.Label(main_model_frame, text="API提供商:").pack(anchor=tk.W, padx=10, pady=5)
         provider_var = tk.StringVar(value=self.project.api_config.provider)
-        provider_combo = ttk.Combobox(config_window, textvariable=provider_var,
+        provider_combo = ttk.Combobox(main_model_frame, textvariable=provider_var,
                                      values=["openai", "anthropic", "ollama", "lm-studio", "localai", "text-generation-webui", "vllm", "custom"])
         provider_combo.pack(fill=tk.X, padx=10, pady=5)
-        
+
+        # API地址
+        ttk.Label(main_model_frame, text="API地址:").pack(anchor=tk.W, padx=10, pady=5)
+        url_var = tk.StringVar(value=self.project.api_config.base_url)
+        url_entry = ttk.Entry(main_model_frame, textvariable=url_var)
+        url_entry.pack(fill=tk.X, padx=10, pady=5)
+
+        # 模型
+        ttk.Label(main_model_frame, text="模型:").pack(anchor=tk.W, padx=10, pady=5)
+        model_var = tk.StringVar(value=self.project.api_config.model)
+        model_entry = ttk.Entry(main_model_frame, textvariable=model_var)
+        model_entry.pack(fill=tk.X, padx=10, pady=5)
+
+        # API密鑰
+        ttk.Label(main_model_frame, text="API密鑰:").pack(anchor=tk.W, padx=10, pady=5)
+        key_var = tk.StringVar(value=self.project.api_config.api_key)
+        key_entry = ttk.Entry(main_model_frame, textvariable=key_var, show="*")
+        key_entry.pack(fill=tk.X, padx=10, pady=5)
+
+        # --- 規劃模型標籤頁 ---
+        planning_model_frame = ttk.Frame(notebook)
+        notebook.add(planning_model_frame, text="規劃模型 (用於大綱、章節等)")
+
+        # 啟用規劃模型
+        use_planning_var = tk.BooleanVar(value=getattr(self.project.api_config, 'use_planning_model', False))
+        use_planning_check = ttk.Checkbutton(planning_model_frame, text="啟用獨立的規劃模型", variable=use_planning_var)
+        use_planning_check.pack(anchor=tk.W, padx=10, pady=10)
+
+        # API提供商
+        ttk.Label(planning_model_frame, text="規劃API提供商:").pack(anchor=tk.W, padx=10, pady=5)
+        planning_provider_var = tk.StringVar(value=getattr(self.project.api_config, 'planning_provider', 'openai'))
+        planning_provider_combo = ttk.Combobox(planning_model_frame, textvariable=planning_provider_var,
+                                               values=["openai", "anthropic", "ollama", "lm-studio", "localai", "text-generation-webui", "vllm", "custom"])
+        planning_provider_combo.pack(fill=tk.X, padx=10, pady=5)
+
+        # API地址
+        ttk.Label(planning_model_frame, text="規劃API地址:").pack(anchor=tk.W, padx=10, pady=5)
+        planning_url_var = tk.StringVar(value=getattr(self.project.api_config, 'planning_base_url', 'https://api.openai.com/v1'))
+        planning_url_entry = ttk.Entry(planning_model_frame, textvariable=planning_url_var)
+        planning_url_entry.pack(fill=tk.X, padx=10, pady=5)
+
+        # 模型
+        ttk.Label(planning_model_frame, text="規劃模型:").pack(anchor=tk.W, padx=10, pady=5)
+        planning_model_var = tk.StringVar(value=getattr(self.project.api_config, 'planning_model', 'gpt-4-turbo'))
+        planning_model_entry = ttk.Entry(planning_model_frame, textvariable=planning_model_var)
+        planning_model_entry.pack(fill=tk.X, padx=10, pady=5)
+
+        # API密鑰
+        ttk.Label(planning_model_frame, text="規劃API密鑰 (留空則使用主要密鑰):").pack(anchor=tk.W, padx=10, pady=5)
+        planning_key_var = tk.StringVar(value=getattr(self.project.api_config, 'planning_api_key', ''))
+        planning_key_entry = ttk.Entry(planning_model_frame, textvariable=planning_key_var, show="*")
+        planning_key_entry.pack(fill=tk.X, padx=10, pady=5)
+
+        # --- 通用設定 ---
+        common_settings_frame = ttk.Frame(main_frame)
+        common_settings_frame.pack(fill=tk.X, pady=(10, 0))
+
         # 預設配置按鈕框架
-        preset_frame = ttk.Frame(config_window)
+        preset_frame = ttk.Frame(common_settings_frame)
         preset_frame.pack(fill=tk.X, padx=10, pady=5)
         
         ttk.Label(preset_frame, text="快速預設:").pack(side=tk.LEFT)
@@ -1921,81 +2072,63 @@ class NovelWriterGUI:
         ttk.Button(preset_frame, text="OpenAI", command=lambda: self.apply_preset("openai", url_var, model_var, provider_var)).pack(side=tk.LEFT, padx=2)
         ttk.Button(preset_frame, text="Anthropic", command=lambda: self.apply_preset("anthropic", url_var, model_var, provider_var)).pack(side=tk.LEFT, padx=2)
         ttk.Button(preset_frame, text="Openrouter", command=lambda: self.apply_preset("openrouter", url_var, model_var, provider_var)).pack(side=tk.LEFT, padx=2)
-        
-        # API地址
-        ttk.Label(config_window, text="API地址:").pack(anchor=tk.W, padx=10, pady=5)
-        url_var = tk.StringVar(value=self.project.api_config.base_url)
-        url_entry = ttk.Entry(config_window, textvariable=url_var)
-        url_entry.pack(fill=tk.X, padx=10, pady=5)
-        
-        # 模型
-        ttk.Label(config_window, text="模型:").pack(anchor=tk.W, padx=10, pady=5)
-        model_var = tk.StringVar(value=self.project.api_config.model)
-        model_entry = ttk.Entry(config_window, textvariable=model_var)
-        model_entry.pack(fill=tk.X, padx=10, pady=5)
-        
-        # API密鑰
-        ttk.Label(config_window, text="API密鑰:").pack(anchor=tk.W, padx=10, pady=5)
-        key_var = tk.StringVar(value=self.project.api_config.api_key)
-        key_entry = ttk.Entry(config_window, textvariable=key_var, show="*")
-        key_entry.pack(fill=tk.X, padx=10, pady=5)
-        
+
         # 分隔線
-        ttk.Separator(config_window, orient='horizontal').pack(fill=tk.X, padx=10, pady=10)
-        
+        ttk.Separator(common_settings_frame, orient='horizontal').pack(fill=tk.X, padx=10, pady=10)
+
         # 語言設定
-        ttk.Label(config_window, text="輸出語言:").pack(anchor=tk.W, padx=10, pady=5)
+        ttk.Label(common_settings_frame, text="輸出語言:").pack(anchor=tk.W, padx=10, pady=5)
         language_var = tk.StringVar(value=self.project.api_config.language)
-        language_combo = ttk.Combobox(config_window, textvariable=language_var,
+        language_combo = ttk.Combobox(common_settings_frame, textvariable=language_var,
                                      values=["zh-TW", "zh-CN", "en-US", "ja-JP"])
         language_combo.pack(fill=tk.X, padx=10, pady=5)
-        
+
         # 引號格式設定
         quote_var = tk.BooleanVar(value=self.project.api_config.use_traditional_quotes)
-        quote_check = ttk.Checkbutton(config_window, text="使用中文引號「」（取消則使用英文引號\"\"）", 
+        quote_check = ttk.Checkbutton(common_settings_frame, text="使用中文引號「」（取消則使用英文引號\"\"）", 
                                      variable=quote_var)
         quote_check.pack(anchor=tk.W, padx=10, pady=5)
-        
+
         # 關閉thinking設定
         thinking_var = tk.BooleanVar(value=self.project.api_config.disable_thinking)
-        thinking_check = ttk.Checkbutton(config_window, text="關閉thinking模式（啟用後傳送thinking: false參數）", 
+        thinking_check = ttk.Checkbutton(common_settings_frame, text="關閉thinking模式（啟用後傳送thinking: false參數）", 
                                         variable=thinking_var)
         thinking_check.pack(anchor=tk.W, padx=10, pady=5)
-        
+
         def save_config():
+            # 保存主要模型設定
             self.project.api_config.provider = provider_var.get()
             self.project.api_config.base_url = url_var.get()
             self.project.api_config.model = model_var.get()
             self.project.api_config.api_key = key_var.get()
+            
+            # 保存規劃模型設定
+            self.project.api_config.use_planning_model = use_planning_var.get()
+            self.project.api_config.planning_provider = planning_provider_var.get()
+            self.project.api_config.planning_base_url = planning_url_var.get()
+            self.project.api_config.planning_model = planning_model_var.get()
+            self.project.api_config.planning_api_key = planning_key_var.get()
+
+            # 保存通用設定
             self.project.api_config.language = language_var.get()
             self.project.api_config.use_traditional_quotes = quote_var.get()
             self.project.api_config.disable_thinking = thinking_var.get()
             
             # 保存到文件
-            config_data = {
-                "provider": self.project.api_config.provider,
-                "base_url": self.project.api_config.base_url,
-                "model": self.project.api_config.model,
-                "api_key": self.project.api_config.api_key,
-                "max_retries": self.project.api_config.max_retries,
-                "timeout": self.project.api_config.timeout,
-                "language": self.project.api_config.language,
-                "use_traditional_quotes": self.project.api_config.use_traditional_quotes,
-                "disable_thinking": self.project.api_config.disable_thinking
-            }
+            config_data = asdict(self.project.api_config)
             
             with open("api_config.json", "w", encoding="utf-8") as f:
                 json.dump(config_data, f, ensure_ascii=False, indent=2)
             
             # 重新初始化服務
-            self.api_connector = APIConnector(self.project.api_config)
+            self.api_connector = APIConnector(self.project.api_config, self.debug_log)
             self.llm_service = LLMService(self.api_connector, self.debug_log)
             self.core = NovelWriterCore(self.project, self.llm_service)
             
             self.debug_log("✅ API配置已保存")
             config_window.destroy()
         
-        ttk.Button(config_window, text="保存", command=save_config).pack(pady=20)
+        ttk.Button(main_frame, text="保存", command=save_config).pack(pady=20)
     
     def apply_preset(self, preset_type, url_var, model_var, provider_var):
         """應用預設配置"""
