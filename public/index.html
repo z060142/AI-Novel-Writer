@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Novel Writer Web</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Novel Writer Web</h1>
+    </header>
+
+    <main>
+        <div class="controls-container">
+            <div class="project-management">
+                <h2>Project Management</h2>
+                <input type="text" id="projectTitle" placeholder="Project Title">
+                <input type="text" id="projectTheme" placeholder="Project Theme">
+                <button id="newProjectBtn">New Project</button>
+                <button id="saveProjectBtn">Save Project</button>
+                <button id="loadProjectBtn">Load Project (Enter Name Below)</button>
+                <input type="text" id="loadProjectName" placeholder="Project Name to Load">
+                <button id="exportProjectBtn">Export Project TXT</button>
+
+                <h3>Available Projects:</h3>
+                <ul id="projectList"></ul>
+                <button id="listProjectsBtn">Refresh Project List</button>
+            </div>
+
+            <div class="generation-controls">
+                <h2>Generation</h2>
+                <div id="currentProjectInfo">Current Project: None</div>
+                <button id="generateOutlineBtn">1. Generate Outline</button>
+                <button id="divideChaptersBtn">2. Divide Chapters</button>
+                <!-- More controls will be added dynamically or later -->
+            </div>
+        </div>
+
+        <div class="content-container">
+            <div class="novel-structure">
+                <h2>Novel Structure</h2>
+                <div id="novelTreeView">Structure (Tree View Placeholder)</div>
+            </div>
+
+            <div class="editor-area">
+                <h2>Content Editor / Details</h2>
+                <textarea id="contentDisplay" rows="20" placeholder="Content will appear here..."></textarea>
+            </div>
+        </div>
+
+        <div class="config-container">
+            <h2>Configuration (Placeholders)</h2>
+            <button id="apiConfigBtn">API Config</button>
+            <div class="api-config-settings">
+                <h3>API Configuration</h3>
+                <label for="apiKey">API Key:</label>
+                <input type="password" id="apiKey" placeholder="Enter API Key">
+                <label for="apiModel">Model:</label>
+                <input type="text" id="apiModel" placeholder="e.g., gpt-4">
+                <label for="apiBaseUrl">Base URL:</label>
+                <input type="text" id="apiBaseUrl" placeholder="e.g., https://api.openai.com/v1">
+                <button id="saveApiConfigBtn">Save API Config</button>
+                <p><em>Note: Click "API Config" button first to load current settings.</em></p>
+            </div>
+            <button id="globalConfigBtn">Global Writing Config</button>
+            <!-- More buttons for stage specific, etc. -->
+        </div>
+
+        <div class="log-container">
+            <h2>Frontend Log</h2>
+            <div id="logArea" style="height: 150px; overflow-y: scroll; border: 1px solid #ccc; background: #f9f9f9; padding: 5px; font-size: 0.9em;"></div>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

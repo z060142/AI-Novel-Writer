@@ -1,0 +1,180 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+header {
+    background-color: #333;
+    color: #fff;
+    padding: 1rem;
+    text-align: center;
+}
+
+main {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping for smaller screens */
+    padding: 1rem;
+    gap: 1rem; /* Space between containers */
+    flex-grow: 1;
+}
+
+.controls-container, .content-container, .config-container, .log-container {
+    background-color: #fff;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.controls-container {
+    display: flex;
+    flex-direction: column; /* Stack project mgmt and generation */
+    gap: 1rem;
+    flex: 1 1 300px; /* Flex basis 300px, can grow/shrink */
+}
+
+.project-management, .generation-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.content-container {
+    display: flex;
+    gap: 1rem;
+    flex: 2 1 600px; /* Takes more space */
+}
+
+.novel-structure {
+    flex: 1;
+    min-width: 200px;
+}
+
+.editor-area {
+    flex: 2;
+}
+
+.config-container {
+    flex: 1 1 100%; /* Full width if wraps */
+}
+
+.log-container {
+    flex: 1 1 100%; /* Full width if wraps */
+    margin-top: 1rem;
+}
+
+
+input[type="text"], textarea {
+    width: calc(100% - 12px); /* Account for padding */
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+button {
+    padding: 0.6rem 1rem;
+    background-color: #5cb85c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+button:hover {
+    background-color: #4cae4c;
+}
+
+button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+#projectList {
+    list-style-type: none;
+    padding: 0;
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid #eee;
+}
+
+#projectList li {
+    padding: 0.3rem;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+#projectList li:hover {
+    background-color: #e9e9e9;
+}
+
+#currentProjectInfo {
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    background-color: #e7f3fe;
+    border-left: 5px solid #2196F3;
+}
+
+#logArea {
+    white-space: pre-wrap; /* Keep newlines in logs */
+}
+
+/* Tree View Styles */
+.tree-root, .tree-root ul {
+    list-style-type: none;
+    padding-left: 20px;
+}
+.tree-item {
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    margin: 2px 0;
+}
+.tree-item:hover {
+    background-color: #f0f0f0;
+}
+.tree-item.selected {
+    background-color: #d0e0f0;
+    font-weight: bold;
+}
+.novel-title-item {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #337ab7;
+}
+.chapter-item {
+    color: #5cb85c;
+}
+.paragraph-item {
+    color: #f0ad4e;
+}
+.chapter-outline-item {
+    color: #5bc0de;
+}
+.placeholder-item {
+    color: #999;
+    font-style: italic;
+    cursor: default;
+}
+.placeholder-item:hover {
+    background-color: transparent;
+}
+
+#novelTreeView {
+    border: 1px solid #ddd;
+    padding: 10px;
+    min-height: 200px; /* Ensure it has some height */
+    max-height: 400px; /* Prevent it from becoming too tall */
+    overflow-y: auto; /* Add scroll for overflow */
+}
