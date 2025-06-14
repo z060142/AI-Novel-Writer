@@ -1,376 +1,141 @@
-# 階層式LLM小說創作工具 v3.0
-
-一個功能強大的基於大語言模型的小說創作輔助工具，採用分層創作方法論，支持從大綱規劃到段落寫作的完整創作流程。
-
-## ✨ 主要特色
-
-- **🏗️ 階層式創作**：大綱 → 章節 → 段落 → 內容的完整創作流程
-- **🤖 多API支持**：OpenAI、Claude、Ollama等主流模型
-- **🎨 智能配置**：全局風格控制和動態提示詞生成
-- **🔄 自動寫作**：支持普通和智能兩種自動寫作模式
-- **🌳 可視化管理**：樹狀圖展示小說結構和創作進度
-- **📚 累進式設定**：隨創作進度自動累積和管理角色、場景、名詞等設定
-- **🔍 事件追蹤功能**：自動記錄各項設定的出現章節，確保前後一致性
-
-## 🚀 安裝
-
-1. 安裝 [Python](https://www.python.org/downloads/) 3.11以上版本（記得勾選 Add to PATH）
-2. 下載解壓縮專案檔案
-3. 在專案資料夾執行：
-   ```
-   pip install -r requirements.txt
-   python novel_writer.py
-   ```
-
----
-
-# 📖 第一部分：創作指南
-
-## 🚀 創作流程
-
-### 1. 基本設定
-1. **輸入作品信息**
-   - 小說標題：《你的小說名》
-   - 主題風格：如「都市奇幻」、「校園青春」等
-
-2. **選擇創作風格**（快速設定）
-   - 敘述方式：第一人稱/第三人稱
-   - 篇幅偏好：簡潔/適中/詳細
-
-### 2. 生成大綱
-點擊「1.大綱」按鈕，系統將生成包含以下內容的完整大綱：
-- 故事概要和主要角色
-- 世界觀設定
-- 核心衝突和情節走向
-- 預計章節數量
-
-**💡 小技巧**：在「額外指示」中添加特殊要求，如：
-```
-請加強角色之間的情感衝突
-故事背景設定在民國時期
-融入懸疑推理元素
-```
-
-### 3. 劃分章節
-點擊「2.章節」生成章節結構，通常包含10-15章：
-- 每章都有具體標題和摘要
-- 明確的情節發展脈絡
-- 合理的篇幅分配
-
-### 4. 開始寫作
-
-#### 手動寫作
-1. 在樹狀圖中選擇要寫作的章節
-2. 系統自動生成該章節的段落規劃
-3. 選擇段落，點擊「寫作」或「智能寫作」
-
-#### 自動寫作（推薦）
-1. 點擊「自動寫作」或「智能自動寫作」
-2. 設定延遲時間（建議2-3秒）
-3. 系統將自動完成所有章節和段落
-
-## 🎨 創作技巧
-
-### 風格控制
-**全局設定**可以控制整部小說的風格：
-- **語調**：溫暖、幽默、嚴肅、輕鬆等
-- **對話風格**：自然對話、文藝腔調、口語化等
-- **描述密度**：簡潔（重情節）、豐富（重描寫）
-
-### 內容一致性
-**持續要素管理**確保故事連貫：
-- **核心主題**：如「成長與友情」、「家庭責任」
-- **必須包含**：重要的情節元素或角色特徵
-- **避免要素**：不希望出現的內容類型
-
-### 參考內容系統
-提升寫作質量的關鍵功能：
-1. **選中參考文本**：在編輯區選中優秀的段落
-2. **點擊「使用選中」**：設為參考內容
-3. **寫作時參考**：新段落會參考選中內容的風格
-
-### 重寫優化
-對不滿意的段落進行優化：
-1. 選擇要優化的段落
-2. 在「特別要求」中描述期望的改進方向
-3. 點擊「重寫優化」
-
-**優化範例**：
-```
-加強情感描寫，讓角色的內心掙扎更明顯
-增加環境描寫，營造更好的氛圍
-簡化對話，讓角色說話更自然
-```
-
-## 📊 進度管理
-
-### 樹狀圖功能
-- **📖 根節點**：小說總覽
-- **📋 大綱**：整體故事結構
-- **📚 章節**：各章內容和狀態
-- **📄 段落**：具體寫作進度
-
-### 狀態追蹤
-- **未開始**：尚未生成內容
-- **進行中**：正在寫作
-- **已完成**：內容已完成
-- **錯誤**：需要重新生成
-
-### 累進式設定管理
-系統具備強大的設定一致性功能：
-
-**自動設定提取**
-- **人物設定**：自動識別並記錄新出現的角色
-- **場景設定**：提取重要地點和環境描述  
-- **專有名詞**：收集世界觀相關的特殊概念
-- **情節要點**：記錄關鍵劇情發展
-
-**事件追蹤系統**
-- **章節註記**：記錄每項設定首次出現的具體章節
-- **出現軌跡**：追蹤角色、場景在不同章節的使用情況
-- **一致性檢查**：確保角色特徵、場景描述前後呼應
-
-**累進式建構**
-隨著創作進度，設定庫會逐漸豐富：
-```
-第1章：建立主角設定
-第3章：新增校園場景
-第5章：引入魔法系統概念
-第8章：擴展角色關係網
-```
-
-這樣的機制確保：
-- ✅ 角色性格不會前後矛盾
-- ✅ 場景描述保持一致
-- ✅ 專有名詞使用統一
-- ✅ 情節發展符合邏輯
-
-# 小說寫作風格提示指南
-
-## 📚 主要小說類型
-- 純文學
-- 歐美翻譯文學
-- 日系輕小說
-- 流水帳小說
-- 龍傲天類型
-- 武俠小說
-- 科幻小說
-- 懸疑推理
-- 愛情小說
-
-## 🎭 常用敘事流派
-### 傳統敘事類
-- 第三人稱全知視角
-- 第一人稱敘事
-- 第二人稱敘事
-- 多重視角敘事
-
-### 特殊表現形式
-- 意識流
-- 全對話流
-- 書信體
-- 日記體
-- 論壇體/SNS體
-
-### 時間結構
-- 線性敘事
-- 非線性敘事
-- 倒敘法
-- 預敘法
-
-### 輕小說特色流派
-- 電玩UI風
-- 數據化敘事
-- 異世界轉生系
-- 校園超自然系
-- 戀愛喜劇系
-
-## ✍️ 風格組合範例
-- 台灣繁體譯本的日系輕小說文風，全對話流寫作
-- 歐美翻譯文學風格，非線性多重視角敘事
-- 純文學意識流，第一人稱碎片化敘事
-- 龍傲天類型，數據化電玩UI風呈現
-
-
-# 手動編輯功能說明
-
-## 🎯 手動編輯與內容調整
-
-### 完全自主的內容控制
-
-所有AI生成的內容都可以透過樹狀圖進行手動編輯：
-
-**編輯方式**
-- **雙擊節點**：直接編輯選中的內容
-- **右鍵選單**：選擇「編輯內容」
-- **編輯按鈕**：使用樹狀圖下方的編輯按鈕
-
-**可編輯內容**
-- ✏️ **整體大綱**：修改故事結構、角色設定、世界觀
-- ✏️ **章節大綱**：調整章節內的情節安排和重點
-- ✏️ **段落內容**：直接修改已生成的文字內容
-- ✏️ **章節標題**：透過「添加章節」功能自訂標題
-
-**協作式創作流程**
-```
-1. AI生成初稿 → 2. 手動精修 → 3. 影響後續生成
-```
-
-**💡 創作策略**
-- **AI+人工協作**：AI負責框架和初稿，人工負責精修和風格調整
-- **外部工具整合**：可將內容複製到ChatGPT、Claude等其他AI工具進行修改，再貼回程式
-- **迭代式完善**：透過不斷編輯調整，逐步達到理想效果
-
-**🔄 影響機制**
-修改後的內容會直接影響後續創作：
-- **修改大綱** → 影響章節劃分和內容生成
-- **修改章節大綱** → 影響該章節的段落安排
-- **修改已完成段落** → 影響後續段落的銜接和風格
-- **調整角色設定** → 影響角色在後續章節的表現
-
-這種設計讓創作者能夠：
-✅ 保持對作品的完全控制權
-✅ 結合AI效率與人工創意
-✅ 靈活調整創作方向
-✅ 確保內容品質符合預期
-
-## 🛠️ 實用編輯技巧
-
-### 大綱優化
-當AI生成的大綱不夠理想時：
-1. 雙擊「📋 整體大綱」節點
-2. 在編輯視窗中調整：
-   - 加強角色動機描述
-   - 調整情節發展節奏
-   - 補充世界觀細節
-   - 明確核心衝突
-
-### 章節調整
-針對特定章節進行精細調整：
-1. 選擇目標章節的「📝 章節大綱」
-2. 修改章節重點：
-   - 調整情節發展方向
-   - 增減角色戲份
-   - 改變場景設定
-   - 調整情感基調
-
-### 段落潤色
-對已生成的段落進行品質提升：
-1. 選擇要修改的段落節點
-2. 常見修改方向：
-   - 改善文字流暢度
-   - 增強情感表達
-   - 調整描寫密度
-   - 優化對話自然度
-
-### 與外部AI工具協作
-充分利用各種AI工具的優勢：
-1. **複製內容到ChatGPT/Claude**進行風格調整
-2. **使用專業寫作AI**進行語言潤色
-3. **借助翻譯工具**檢查語言表達
-4. **修改完成後貼回程式**，繼續後續創作
-
-這樣的工作流程讓您能夠：
-- 🎨 發揮不同AI工具的專長
-- ⚡ 維持創作效率
-- 🎯 確保內容品質
-- 🔧 保持完整的創作控制權
-
-
----
-
-# ⚙️ 第二部分：程式配置
-
-## 🔧 API配置
-
-### 快速設定
-啟動程式後點擊「配置API」，選擇預設配置：
-
-| 服務商 | 預設地址 | 建議模型 | 說明 |
-|--------|----------|----------|------|
-| **OpenAI** | `https://api.openai.com/v1` | `gpt-4o` | 官方服務，品質最佳 |
-| **Anthropic** | `https://api.anthropic.com` | `claude-sonnet-4-20250514` | Claude系列，適合創作 |
-| **Ollama** | `http://localhost:11434/v1` | `gemma3:12b-it-qat` | 本地模型，免費使用 |
-| **OpenRouter** | `https://openrouter.ai/api/v1` | `deepseek/deepseek-chat-v3-0324` | 聚合服務，多種選擇 |
-
-### 詳細配置
-- **API密鑰**：從對應服務商獲取
-- **模型選擇**：根據需求和預算選擇
-- **語言設定**：繁體中文(zh-TW)、簡體中文(zh-CN)等
-- **引號格式**：中文引號「」或英文引號""
-
-## 📁 檔案管理
-
-### 專案保存
-- **保存格式**：JSON檔案，包含完整創作內容
-- **自動備份**：建議定期保存避免資料遺失
-- **檔案結構**：
-```
-your_novel.json
-├── 基本資訊（標題、主題）
-├── 大綱內容
-├── 章節結構
-├── 段落內容
-└── 世界設定
-```
-
-### 內容導出
-- **純文字格式**：適合閱讀和分享
-- **包含章節標題**：結構化排版
-- **編碼格式**：UTF-8，確保中文正常顯示
-
-## 🎛️ 高級配置
-
-### 全局創作配置
-**路徑**：工具 → 全局設定
-
-- **基本風格**：敘述方式、節奏、語調設定
-- **持續要素**：核心主題、必要元素、避免要素
-- **篇幅控制**：章節和段落的目標字數
-- **全局指導**：會在所有創作階段考慮的指示
-
-### 階段參數配置
-**路徑**：工具 → 階段配置
-
-- **大綱配置**：創意程度、詳細程度設定
-- **寫作配置**：字數控制、品質偏好
-- **額外指示**：針對特定階段的特殊要求
-
-## 🚨 故障排除
-
-### 常見問題
-
-**API調用失敗**
-```
-檢查項目：
-✓ 網路連線是否正常
-✓ API密鑰是否正確
-✓ API額度是否充足
-✓ 模型名稱是否正確
-```
-
-**生成內容不理想**
-```
-調整建議：
-• 降低創意程度（0.3-0.5）
-• 增加具體的額外指示
-• 使用參考內容功能
-• 嘗試重新生成
-```
-
-**程式運行緩慢**
-```
-優化方法：
-• 增加API調用延遲
-• 使用本地模型
-• 減少同時處理的內容量
-• 定期重啟程式
-```
-
-### 效能建議
-
-1. **初次使用**：建議從簡單故事開始熟悉流程
-2. **大型專案**：分章節進行，避免一次性處理過多內容
-3. **網路環境**：穩定的網路連線可提升創作體驗
-4. **模型選擇**：平衡品質和成本，Claude適合創作，GPT-4品質佳，deepseek擁有最豐富中文語料與最低成本
-
+# Novel Writer Web Application
+
+This is a web-based application designed to assist users in writing novels using a hierarchical approach, with AI-powered content generation capabilities. It is a Node.js conversion of the original Python Tkinter application.
+
+## Core Functionalities
+
+-   **Hierarchical Writing**: Follows a structured process: Overall Outline -> Chapters -> Chapter Outlines -> Paragraphs.
+-   **LLM Integration**: Utilizes Large Language Models (configurable for OpenAI, Anthropic, Ollama, other custom OpenAI-compatible APIs) for:
+    -   Generating novel outlines.
+    -   Dividing outlines into chapters.
+    -   Generating detailed chapter outlines.
+    -   Planning paragraph purposes.
+    -   Writing paragraph content.
+    -   Extracting world-building elements.
+-   **Project Management**: Create, save, load, and export novel projects. Project data is stored locally on the server.
+-   **Configuration**:
+    -   Global API settings (API key, model, endpoint).
+    -   Global Writing Configuration (writing style, pacing, tone, themes, target word counts).
+    -   (Planned) Stage-specific configurations for fine-tuning generation at each step.
+-   **World Building**: Manage characters, settings, terminology. These elements can be automatically extracted from generated content.
+-   **Interactive UI**: Web interface for managing projects, configurations, novel structure, and content.
+-   **Advanced Features**:
+    -   Use selected text as reference context for paragraph generation.
+    -   Automatic writing mode to generate content for entire chapters.
+
+## Prerequisites
+
+-   **Node.js**: Version 16.x or higher is recommended.
+-   **npm**: Node Package Manager (usually installed with Node.js).
+
+## Setup and Installation
+
+1.  **Get the Code**:
+    Download or clone the project files to your local machine.
+
+2.  **Navigate to Project Directory**:
+    Open a terminal or command prompt and change to the project's root directory.
+    \`\`\`bash
+    cd path/to/novel-writer-web
+    \`\`\`
+
+3.  **Install Dependencies**:
+    Run the following command to install the necessary Node.js packages defined in `package.json` (like Express, Axios, etc.):
+    \`\`\`bash
+    npm install
+    \`\`\`
+
+4.  **API Configuration**:
+    The application requires API credentials to connect to Large Language Models.
+    -   On the first run, or if `server/data/api_config.json` is missing, the application will create it with default values.
+    -   **You MUST edit this file or use the UI to set your API key and preferred model.**
+    -   The key fields in `server/data/api_config.json` (or configurable via the UI) are:
+        -   `api_key`: Your secret API key for the LLM provider.
+        -   `model`: The specific model you want to use (e.g., "gpt-4", "claude-3-opus-20240229", your local model name for Ollama).
+        -   `base_url`: The base endpoint for the API (e.g., "https://api.openai.com/v1", "http://localhost:11434/v1" for Ollama).
+        -   `provider`: The LLM provider type (e.g., "openai", "anthropic", "custom" for Ollama or other OpenAI-compatible APIs).
+        -   It also supports separate configuration for a "planning model" used for outlining and structuring tasks.
+
+## Running the Application
+
+1.  **Start the Server**:
+    Once dependencies are installed and API configuration is reviewed, run the following command from the project's root directory:
+    \`\`\`bash
+    npm start
+    \`\`\`
+    This uses the `start` script defined in `package.json` (which executes `node server/server.js`).
+
+2.  **Access the Application**:
+    Open your web browser and navigate to:
+    [http://localhost:3000](http://localhost:3000) (or the port specified in `server/server.js` or console output).
+
+## Using the Application (Web Interface)
+
+The web interface is divided into several key areas:
+
+-   **Project Management**:
+    -   Enter a "Project Title" and "Project Theme".
+    -   Click "New Project" to start.
+    -   "Save Project" saves your current work to the server.
+    -   "Load Project": Enter a project name (from the "Available Projects" list) and click to load.
+    -   "Refresh Project List": Updates the list of saved projects.
+    -   "Export Project TXT": Downloads the current novel as a plain text file.
+
+-   **Configuration**:
+    -   **API Config**: Click "API Config" to view current settings. Input your API key, model, and base URL, then click "Save API Config".
+    -   **Global Writing Config**: Click "Global Writing Config" to open a modal where you can define overall writing style, tone, themes, target word counts, etc. Click "Apply Global Config to Project" in the modal (and then save the project to persist these).
+
+-   **Novel Structure Tree**:
+    -   Displays the hierarchical structure: Novel Title -> Overall Outline -> Chapters -> Chapter Outlines -> Paragraphs.
+    -   Click on items to view their content or details in the "Content Editor".
+
+-   **Content Editor / Details**:
+    -   Shows the content of the selected item from the novel tree.
+    -   Allows direct editing of the overall outline, chapter outlines (as JSON), and paragraph content.
+    -   **Remember to click "Save Project" to persist your edits.**
+
+-   **Generation Controls**:
+    -   "Generate Outline": Generates the main plot and structure for your novel.
+    -   "Divide Chapters": Splits the overall outline into distinct chapters.
+    -   (After selecting a chapter/paragraph in the tree) Further controls will appear or be enabled for generating chapter outlines, dividing paragraphs, and writing individual paragraphs.
+    -   "Write/Rewrite Selected Paragraph": Writes or re-writes the content for the currently selected paragraph in the tree.
+
+-   **Advanced Features**:
+    -   **Reference Context**: Select text in the "Content Editor" and click "Use Selected Text as Reference". This text will be used as additional context for the next paragraph writing task. Click "Clear Reference" to remove it.
+    -   **Automatic Writing**:
+        -   "Auto Write Current Chapter": Sequentially generates content for all uncompleted paragraphs in the currently selected (or first) chapter.
+        -   "Delay (sec)": Sets the pause between automatic paragraph generations.
+        -   "Stop Auto Writing": Halts the current auto-writing process.
+
+-   **Frontend Log**: Displays messages about frontend operations and API call statuses.
+
+### Basic Workflow Example
+
+1.  Configure your API settings via the "API Config" button.
+2.  Enter a "Project Title" and "Theme", then click "New Project".
+3.  (Optional) Adjust "Global Writing Config".
+4.  Click "Generate Outline". Review/edit the outline in the Content Editor.
+5.  Click "Divide Chapters".
+6.  Select a chapter in the Novel Structure tree. (The system might auto-generate its chapter outline and paragraph divisions, or you'll have buttons to trigger these).
+7.  Select a paragraph. Click "Write/Rewrite Selected Paragraph". Review/edit.
+8.  Use "Auto Write Current Chapter" to complete a chapter more quickly.
+9.  **Save your project frequently!**
+
+## Project Data
+
+-   All novel project data is stored as individual `.json` files in the `server/data/` directory within the application folder.
+-   The global API configuration is stored in `server/data/api_config.json`.
+
+## Troubleshooting
+
+-   **Server Not Starting**:
+    -   Ensure Node.js and npm are installed correctly.
+    -   Run `npm install` to get all dependencies.
+    -   Check if the port (default 3000) is already in use by another application.
+-   **API Errors / No Content Generated**:
+    -   Verify your API key, model name, and base URL in the "API Config" section of the UI (or in `server/data/api_config.json`).
+    -   Check your LLM provider account for any issues (e.g., billing, rate limits).
+    -   Look at the messages in the "Frontend Log" and the server console output for error details.
+-   **Project Not Saving/Loading**:
+    -   Ensure the `server/data/` directory is writable by the Node.js process.
+    -   Check for any errors in the server console.

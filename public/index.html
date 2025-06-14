@@ -10,6 +10,7 @@
     <header>
         <h1>Novel Writer Web</h1>
     </header>
+    <div id="generalStatus" style="padding: 10px; margin-top: 10px; background-color: #f0f0f0; border: 1px solid #ccc; text-align: center;">App Ready.</div>
 
     <main>
         <div class="controls-container">
@@ -33,7 +34,15 @@
                 <div id="currentProjectInfo">Current Project: None</div>
                 <button id="generateOutlineBtn">1. Generate Outline</button>
                 <button id="divideChaptersBtn">2. Divide Chapters</button>
+                <button id="writeCurrentParagraphBtn" style="margin-top:10px;">Write/Rewrite Selected Paragraph</button>
                 <!-- More controls will be added dynamically or later -->
+                <h4>Automatic Writing</h4>
+                <button id="autoWriteChapterBtn">Auto Write Current Chapter</button>
+                <button id="autoWriteAllBtn" title="Not fully implemented yet">Auto Write All (Conceptual)</button>
+                <label for="autoWriteDelay">Delay (sec):</label>
+                <input type="number" id="autoWriteDelay" value="2" min="0" style="width: 60px;">
+                <button id="stopAutoWriteBtn" style="background-color: #d9534f;">Stop Auto Writing</button>
+                <div id="autoWriteProgress" style="font-size:0.9em; margin-top:5px;"></div>
             </div>
         </div>
 
@@ -45,6 +54,12 @@
 
             <div class="editor-area">
                 <h2>Content Editor / Details</h2>
+                <div class="reference-context-controls">
+                    <h4>Reference Context for Writing</h4>
+                    <button id="useSelectedAsRefBtn">Use Selected Text as Reference</button>
+                    <button id="clearRefBtn">Clear Reference</button>
+                    <p id="currentReferenceContext" style="font-size: 0.8em; color: #555; max-height: 50px; overflow-y: auto;"></p>
+                </div>
                 <textarea id="contentDisplay" rows="20" placeholder="Content will appear here..."></textarea>
             </div>
         </div>
@@ -70,6 +85,68 @@
         <div class="log-container">
             <h2>Frontend Log</h2>
             <div id="logArea" style="height: 150px; overflow-y: scroll; border: 1px solid #ccc; background: #f9f9f9; padding: 5px; font-size: 0.9em;"></div>
+        </div>
+
+        <div class="global-config-settings" id="globalConfigModal" style="display:none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background-color: white; padding: 20px; border: 1px solid #ccc; box-shadow: 0 0 15px rgba(0,0,0,0.2); z-index: 1000; width: 80%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
+            <h2>Global Writing Configuration</h2>
+            <div class="form-grid">
+                <div><label for="gcWritingStyle">Writing Style:</label>
+                <select id="gcWritingStyle">
+                    <option value="FIRST_PERSON">第一人稱</option>
+                    <option value="THIRD_PERSON_LIMITED">第三人稱限制視角</option>
+                    <option value="THIRD_PERSON_OMNISCIENT">第三人稱全知視角</option>
+                    <option value="MULTIPLE_POV">多重視角</option>
+                </select></div>
+
+                <div><label for="gcPacingStyle">Pacing Style:</label>
+                <select id="gcPacingStyle">
+                    <option value="SLOW_BURN">慢熱型</option>
+                    <option value="FAST_PACED">快節奏</option>
+                    <option value="BALANCED">平衡型</option>
+                    <option value="EPISODIC">章回體</option>
+                </select></div>
+
+                <div><label for="gcTone">Tone:</label>
+                <input type="text" id="gcTone"></div>
+
+                <div><label for="gcTargetChapterWords">Target Chapter Words:</label>
+                <input type="number" id="gcTargetChapterWords" step="100"></div>
+
+                <div><label for="gcTargetParagraphWords">Target Paragraph Words:</label>
+                <input type="number" id="gcTargetParagraphWords" step="50"></div>
+
+                <div><label for="gcDialogueStyle">Dialogue Style:</label>
+                <input type="text" id="gcDialogueStyle"></div>
+
+                <div><label for="gcDescriptionDensity">Description Density:</label>
+                <select id="gcDescriptionDensity">
+                    <option value="簡潔">簡潔</option>
+                    <option value="適中">適中</option>
+                    <option value="豐富">豐富</option>
+                </select></div>
+
+                <div><label for="gcEmotionalIntensity">Emotional Intensity:</label>
+                <select id="gcEmotionalIntensity">
+                    <option value="克制">克制</option>
+                    <option value="適中">適中</option>
+                    <option value="濃烈">濃烈</option>
+                </select></div>
+            </div>
+
+            <label for="gcContinuousThemes">Continuous Themes (one per line):</label>
+            <textarea id="gcContinuousThemes" rows="3"></textarea>
+
+            <label for="gcMustIncludeElements">Must Include Elements (one per line):</label>
+            <textarea id="gcMustIncludeElements" rows="3"></textarea>
+
+            <label for="gcAvoidElements">Avoid Elements (one per line):</label>
+            <textarea id="gcAvoidElements" rows="3"></textarea>
+
+            <label for="gcGlobalInstructions">Global Instructions:</label>
+            <textarea id="gcGlobalInstructions" rows="4"></textarea>
+
+            <button id="saveGlobalConfigBtn" style="margin-top: 10px;">Apply Global Config to Project</button>
+            <button id="closeGlobalConfigBtn" style="margin-top: 10px; background-color: #aaa;">Close</button>
         </div>
     </main>
 
