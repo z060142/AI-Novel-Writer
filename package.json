@@ -1,0 +1,17 @@
+{
+  "name": "novel-writer-web",
+  "version": "1.0.0",
+  "description": "Web-based novel writing assistant, converted from Python Tkinter.",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "express": "^4.18.0",
+    "sanitize-filename": "^1.6.3"
+  },
+  "author": "AI Assistant (Jules)",
+  "license": "MIT"
+}

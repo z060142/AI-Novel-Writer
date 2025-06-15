@@ -1,0 +1,16 @@
+{
+  "base_url": "https://api.openai.com/v1",
+  "model": "gpt-4",
+  "provider": "openai",
+  "api_key": "",
+  "max_retries": 3,
+  "timeout": 60,
+  "language": "zh-TW",
+  "use_traditional_quotes": true,
+  "disable_thinking": false,
+  "use_planning_model": false,
+  "planning_base_url": "https://api.openai.com/v1",
+  "planning_model": "gpt-4-turbo",
+  "planning_provider": "openai",
+  "planning_api_key": ""
+}
