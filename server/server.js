@@ -161,31 +161,39 @@ app.get('/api/projects/export/:projectName', async (req, res) => {
     try {
         const project = await loadProject(req.params.projectName);
         let content = [];
-        content.push('《' + project.title + '》'); // Line 164 equivalent
+        content.push('《' + project.title + '》');
         content.push("=".repeat(50));
         content.push("");
-        project.chapters.forEach((chapterData, i) => {
-            const chap = new Chapter(chapterData); // Ensure Chapter is correctly instantiated
-            content.push('第' + (i + 1) + '章 ' + chap.title);
-            content.push("-".repeat(30));
-            content.push("");
-            if (chap.paragraphs) { // Add null check for paragraphs
-                chap.paragraphs.forEach(paraData => {
-                    const para = new Paragraph(paraData); // Ensure Paragraph is correctly instantiated
-                    if (para.content) {
-                        content.push(para.content);
-                        content.push("");
-                    }
-                });
-            }
-            content.push("");
-        });
-        res.setHeader('Content-Disposition', \`attachment; filename="\${sanitize(project.title)}.txt"\`);
+
+        if (project.chapters && Array.isArray(project.chapters)) {
+            project.chapters.forEach((chapterData, i) => {
+                const chap = new Chapter(chapterData); // Ensure Chapter is correctly instantiated
+                content.push('第' + (i + 1) + '章 ' + chap.title);
+                content.push("-".repeat(30));
+                content.push("");
+                if (chap.paragraphs && Array.isArray(chap.paragraphs)) {
+                    chap.paragraphs.forEach(paraData => {
+                        const para = new Paragraph(paraData); // Ensure Paragraph is correctly instantiated
+                        if (para.content) {
+                            content.push(para.content);
+                            content.push("");
+                        }
+                    });
+                }
+                content.push("");
+            });
+        }
+
+        // Using string concatenation for setHeader as well to be safe
+        const sanitizedTitle = sanitize(project.title) || 'exported_novel';
+        res.setHeader('Content-Disposition', 'attachment; filename="' + sanitizedTitle + '.txt"');
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.send(content.join('\n'));
     } catch (error) {
-        console.error('Error exporting novel:', error); // Log the error on server
-        if (error.message === 'Project not found') return res.status(404).json({ message: error.message });
+        console.error('Error exporting novel:', error);
+        if (error.message === 'Project not found') {
+            return res.status(404).json({ message: error.message });
+        }
         res.status(500).json({ message: 'Error exporting novel', error: error.message });
     }
 });
