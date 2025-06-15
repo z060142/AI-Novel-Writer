@@ -157,27 +157,34 @@ app.get('/api/projects/load/:projectName', async (req, res) => { /* ... existing
         res.status(500).json({ message: 'Error loading project', error: error.message });
     }
 });
-app.get('/api/projects/export/:projectName', async (req, res) => { /* ... existing code ... */
+app.get('/api/projects/export/:projectName', async (req, res) => {
     try {
         const project = await loadProject(req.params.projectName);
         let content = [];
-        content.push(\`《\${project.title}》\`);
+        content.push('《' + project.title + '》'); // Line 164 equivalent
         content.push("=".repeat(50));
         content.push("");
         project.chapters.forEach((chapterData, i) => {
-            const chap = new Chapter(chapterData);
-            content.push(\`第\${i + 1}章 \${chap.title}\`);
-            content.push("-".repeat(30)); content.push("");
-            chap.paragraphs.forEach(paraData => {
-                const para = new Paragraph(paraData);
-                if (para.content) { content.push(para.content); content.push(""); }
-            });
+            const chap = new Chapter(chapterData); // Ensure Chapter is correctly instantiated
+            content.push('第' + (i + 1) + '章 ' + chap.title);
+            content.push("-".repeat(30));
+            content.push("");
+            if (chap.paragraphs) { // Add null check for paragraphs
+                chap.paragraphs.forEach(paraData => {
+                    const para = new Paragraph(paraData); // Ensure Paragraph is correctly instantiated
+                    if (para.content) {
+                        content.push(para.content);
+                        content.push("");
+                    }
+                });
+            }
             content.push("");
         });
         res.setHeader('Content-Disposition', \`attachment; filename="\${sanitize(project.title)}.txt"\`);
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.send(content.join('\n'));
     } catch (error) {
+        console.error('Error exporting novel:', error); // Log the error on server
         if (error.message === 'Project not found') return res.status(404).json({ message: error.message });
         res.status(500).json({ message: 'Error exporting novel', error: error.message });
     }
