@@ -127,7 +127,7 @@ app.post('/api/projects/new', async (req, res) => { /* ... existing code, ensure
         const safeFileName = sanitize(title) || 'Untitled Project';
         if (safeFileName === 'api_config') return res.status(400).json({ message: 'Project title cannot be "api_config".' });
         const filePath = path.join(DATA_DIR, `${safeFileName}.json`);
-        try { await fs.access(filePath); return res.status(409).json({ message: `Project '\${title}' already exists.` }); } catch (err) {}
+        try { await fs.access(filePath); return res.status(409).json({ message: 'Project \'' + title + '\' already exists.' }); } catch (err) {}
 
         const newProject = new NovelProject({ title, theme });
         newProject.api_config = new APIConfig(globalApiConfig); // Project gets a copy of current global API config
@@ -145,7 +145,7 @@ app.post('/api/projects/save', async (req, res) => { /* ... existing code ... */
         // Ensure projectData is a full NovelProject instance before saving
         const projectToSave = new NovelProject(projectData);
         await saveProject(projectToSave);
-        res.json({ message: `Project '\${projectData.title}' saved successfully.` });
+        res.json({ message: 'Project \'' + projectData.title + '\' saved successfully.' });
     } catch (error) { res.status(500).json({ message: 'Error saving project', error: error.message }); }
 });
 app.get('/api/projects/load/:projectName', async (req, res) => { /* ... existing code ... */
@@ -302,8 +302,8 @@ app.get('/', (req, res) => {
 // Start server after initialization
 initializeApp().then(() => {
     app.listen(PORT, () => {
-      console.log(\`Server is running on http://localhost:\${PORT}\`);
-      console.log(\`Data directory is \${DATA_DIR}\`);
+      console.log('Server is running on http://localhost:' + PORT);
+      console.log('Data directory is ' + DATA_DIR);
     });
 }).catch(error => {
     console.error("Failed to initialize application. Exiting.", error);
