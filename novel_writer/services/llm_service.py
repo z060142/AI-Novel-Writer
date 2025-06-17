@@ -115,6 +115,9 @@ class LLMService:
                     return json_data
                 else:
                     self.debug_callback(f"❌ JSON解析失敗 (嘗試 {json_attempt + 1}/{self.json_retry_max})")
+                    self.debug_callback(f"📄 原始回應內容:\n{content}")
+                    self.debug_callback(f"📄 回應內容類型: {type(content)}")
+                    self.debug_callback(f"📄 回應長度: {len(content)}")
                     
                     # 如果不是最後一次嘗試，修改prompt並重試
                     if json_attempt < self.json_retry_max - 1:

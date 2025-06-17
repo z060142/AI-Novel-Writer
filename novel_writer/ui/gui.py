@@ -1095,9 +1095,16 @@ class NovelWriterGUI:
                     "outline": self.project.outline,
                     "outline_additional_prompt": self.project.outline_additional_prompt,
                     "chapters_additional_prompt": self.project.chapters_additional_prompt,
+                    "current_context": getattr(self.project, 'current_context', ""),
                     "chapters": chapters_data,
-                    "world_building": asdict(self.project.world_building)
+                    "world_building": asdict(self.project.world_building),
+                    "global_config": asdict(self.project.global_config) if hasattr(self.project, 'global_config') else {}
                 }
+                
+                # 安全確認：絕對不儲存API配置
+                if "api_config" in project_data:
+                    del project_data["api_config"]
+                    self.debug_log("🔒 已確保API配置不會被儲存到專案檔")
                 
                 with open(filename, "w", encoding="utf-8") as f:
                     json.dump(project_data, f, ensure_ascii=False, indent=2)
@@ -1120,41 +1127,69 @@ class NovelWriterGUI:
                 with open(filename, "r", encoding="utf-8") as f:
                     project_data = json.load(f)
                 
-                # 重建項目數據
+                # 重建項目數據（增強容錯機制）
                 self.project.title = project_data.get("title", "")
                 self.project.theme = project_data.get("theme", "")
                 self.project.outline = project_data.get("outline", "")
                 self.project.outline_additional_prompt = project_data.get("outline_additional_prompt", "")
                 self.project.chapters_additional_prompt = project_data.get("chapters_additional_prompt", "")
+                self.project.current_context = project_data.get("current_context", "")
                 
-                # 重建章節數據
+                # 重建章節數據（增強容錯機制）
                 self.project.chapters = []
                 for chapter_data in project_data.get("chapters", []):
-                    chapter = Chapter(
-                        title=chapter_data["title"],
-                        summary=chapter_data["summary"],
-                        key_events=chapter_data.get("key_events", []),
-                        characters_involved=chapter_data.get("characters_involved", []),
-                        estimated_words=chapter_data.get("estimated_words", 3000),
-                        outline=chapter_data.get("outline", {}),
-                        content=chapter_data.get("content", ""),
-                        status=CreationStatus(chapter_data.get("status", "未開始"))
-                    )
+                    try:
+                        chapter = Chapter(
+                            title=chapter_data.get("title", "未命名章節"),
+                            summary=chapter_data.get("summary", ""),
+                            key_events=chapter_data.get("key_events", []),
+                            characters_involved=chapter_data.get("characters_involved", []),
+                            estimated_words=chapter_data.get("estimated_words", 3000),
+                            outline=chapter_data.get("outline", {}),
+                            content=chapter_data.get("content", ""),
+                            status=CreationStatus(chapter_data.get("status", "未開始"))
+                        )
+                    except (KeyError, ValueError) as e:
+                        self.debug_log(f"⚠️  章節資料載入警告，使用預設值: {str(e)}")
+                        chapter = Chapter(
+                            title="未命名章節",
+                            summary="",
+                            key_events=[],
+                            characters_involved=[],
+                            estimated_words=3000,
+                            outline={},
+                            content="",
+                            status=CreationStatus.NOT_STARTED
+                        )
                     
-                    # 重建段落數據
+                    # 重建段落數據（增強容錯機制）
                     chapter.paragraphs = []
                     for para_data in chapter_data.get("paragraphs", []):
-                        paragraph = Paragraph(
-                            order=para_data["order"],
-                            purpose=para_data["purpose"],
-                            content_type=para_data.get("content_type", ""),
-                            key_points=para_data.get("key_points", []),
-                            estimated_words=para_data.get("estimated_words", 0),
-                            mood=para_data.get("mood", ""),
-                            content=para_data.get("content", ""),
-                            status=CreationStatus(para_data.get("status", "未開始")),
-                            word_count=para_data.get("word_count", 0)
-                        )
+                        try:
+                            paragraph = Paragraph(
+                                order=para_data.get("order", 1),
+                                purpose=para_data.get("purpose", ""),
+                                content_type=para_data.get("content_type", ""),
+                                key_points=para_data.get("key_points", []),
+                                estimated_words=para_data.get("estimated_words", 0),
+                                mood=para_data.get("mood", ""),
+                                content=para_data.get("content", ""),
+                                status=CreationStatus(para_data.get("status", "未開始")),
+                                word_count=para_data.get("word_count", 0)
+                            )
+                        except (KeyError, ValueError) as e:
+                            self.debug_log(f"⚠️  段落資料載入警告，使用預設值: {str(e)}")
+                            paragraph = Paragraph(
+                                order=len(chapter.paragraphs) + 1,
+                                purpose="",
+                                content_type="",
+                                key_points=[],
+                                estimated_words=0,
+                                mood="",
+                                content="",
+                                status=CreationStatus.NOT_STARTED,
+                                word_count=0
+                            )
                         chapter.paragraphs.append(paragraph)
                     
                     self.project.chapters.append(chapter)
@@ -1167,8 +1202,46 @@ class NovelWriterGUI:
                     terminology=world_data.get("terminology", {}),
                     plot_points=world_data.get("plot_points", []),
                     relationships=world_data.get("relationships", []),
-                    style_guide=world_data.get("style_guide", "")
+                    style_guide=world_data.get("style_guide", ""),
+                    chapter_notes=world_data.get("chapter_notes", [])  # 新增：確保舊專案有這個欄位
                 )
+                
+                # 安全性措施：完全忽略專案檔中的API配置，只使用api_config.json
+                # 無論專案檔是否包含API配置，都創建新的配置物件並從api_config.json載入
+                if "api_config" in project_data:
+                    self.debug_log("⚠️  專案檔包含API配置，基於安全考量已忽略")
+                
+                from ..models.data_models import APIConfig, GlobalWritingConfig
+                self.project.api_config = APIConfig()
+                self.load_api_config()  # 只從api_config.json載入API設定
+                self.debug_log("🔒 API配置已從api_config.json載入（安全模式）")
+                
+                # 處理global_config：從專案檔載入，如果沒有則使用預設值
+                if "global_config" in project_data:
+                    global_config_data = project_data["global_config"]
+                    self.project.global_config = GlobalWritingConfig(
+                        writing_style=global_config_data.get("writing_style", "第三人稱限制視角"),
+                        pacing_style=global_config_data.get("pacing_style", "平衡型"),
+                        tone=global_config_data.get("tone", "溫暖"),
+                        continuous_themes=global_config_data.get("continuous_themes", []),
+                        must_include_elements=global_config_data.get("must_include_elements", []),
+                        avoid_elements=global_config_data.get("avoid_elements", []),
+                        target_chapter_words=global_config_data.get("target_chapter_words", 3000),
+                        target_paragraph_words=global_config_data.get("target_paragraph_words", 400),
+                        paragraph_count_preference=global_config_data.get("paragraph_count_preference", "適中"),
+                        dialogue_style=global_config_data.get("dialogue_style", "自然對話"),
+                        description_density=global_config_data.get("description_density", "豐富"),
+                        emotional_intensity=global_config_data.get("emotional_intensity", "適中"),
+                        global_instructions=global_config_data.get("global_instructions", "")
+                    )
+                else:
+                    # 如果專案檔沒有global_config，使用預設值
+                    self.project.global_config = GlobalWritingConfig()
+                
+                # 重新初始化服務以確保使用正確的配置
+                self.api_connector = APIConnector(self.project.api_config, self.debug_log)
+                self.llm_service = LLMService(self.api_connector, self.debug_log)
+                self.core = NovelWriterCore(self.project, self.llm_service, self.debug_log)
                 
                 # 更新UI
                 self.title_entry.delete(0, tk.END)

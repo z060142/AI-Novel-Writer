@@ -298,40 +298,41 @@ class NovelWriterCore:
             self.project.world_building.settings["總體世界觀"] = outline_data["world_setting"]
     
     def _update_world_building_from_content(self, content: str, chapter_index: int = None, paragraph_index: int = None):
-        """簡化版世界設定更新 - 智能檢測重複和更新"""
+        """段落分析 - 純添加模式，不修改既有條目"""
         
         prompt = f"""
-分析以下段落，更新世界設定。請遵循以下規則：
+分析以下段落，從中提取新的世界設定元素。請嚴格遵循純添加原則：
 
-【當前世界設定】
-角色：{json.dumps(self.project.world_building.characters, ensure_ascii=False)}
-場景：{json.dumps(self.project.world_building.settings, ensure_ascii=False)}
-名詞：{json.dumps(self.project.world_building.terminology, ensure_ascii=False)}
+【當前已存在的設定】
+角色：{list(self.project.world_building.characters.keys())}
+場景：{list(self.project.world_building.settings.keys())}
+名詞：{list(self.project.world_building.terminology.keys())}
 
 【新段落內容】
 {content}
 
-【更新規則】
-1. 如果角色/場景/名詞已存在但有新信息，請在原描述基礎上補充或修正
-2. 如果是全新的項目，才添加到new_*陣列中
-3. 如果是更新既有項目，請放到update_*陣列中
-4. 每個描述控制在15字內
-5. 忽略不重要的細節
+【純添加規則】
+1. 只添加全新的角色/場景/名詞，絕對不修改已存在的條目
+2. 如果角色/場景/名詞已在列表中，跳過，不要添加到輸出
+3. 只添加在段落中明確出現的新元素
+4. 描述控制在15字內，基於段落實際內容
+5. 不要推測或創作未明確提及的信息
 
 輸出格式：
 {{
     "new_characters": [
-        {{"name": "新角色名", "desc": "描述"}}
+        {{"name": "新角色名", "desc": "基於段落的簡短描述"}}
     ],
-    "update_characters": [
-        {{"name": "既有角色名", "desc": "更新後的完整描述"}}
+    "new_settings": [
+        {{"name": "新場景名", "desc": "基於段落的簡短描述"}}
     ],
-    "new_settings": [],
-    "update_settings": [],
-    "new_terms": [],
-    "update_terms": [],
-    "plot_points": ["重要情節點"]
+    "new_terms": [
+        {{"name": "新名詞", "desc": "基於段落的簡短定義"}}
+    ],
+    "plot_points": ["段落中的重要情節點"]
 }}
+
+注意：只輸出真正新增的項目，不要重複已存在的設定。
         """
         
         try:
@@ -344,39 +345,40 @@ class NovelWriterCore:
             if result:
                 world = self.project.world_building
                 
-                # Update characters
+                # 純添加新角色（不修改既有）
                 for char in result.get("new_characters", []):
-                    if char.get("name") and char.get("name") not in world.characters:
-                        world.characters[char["name"]] = char.get("desc", "")
-                for char in result.get("update_characters", []):
-                    if char.get("name") in world.characters:
-                        world.characters[char["name"]] = char.get("desc", "")
+                    name = char.get("name", "")
+                    desc = char.get("desc", "")
+                    if name and name not in world.characters:
+                        world.characters[name] = desc
+                        self.debug_log(f"📝 添加新角色: {name}")
 
-                # Update settings
+                # 純添加新場景（不修改既有）
                 for setting in result.get("new_settings", []):
-                    if setting.get("name") and setting.get("name") not in world.settings:
-                        world.settings[setting["name"]] = setting.get("desc", "")
-                for setting in result.get("update_settings", []):
-                    if setting.get("name") in world.settings:
-                        world.settings[setting["name"]] = setting.get("desc", "")
+                    name = setting.get("name", "")
+                    desc = setting.get("desc", "")
+                    if name and name not in world.settings:
+                        world.settings[name] = desc
+                        self.debug_log(f"🏗️ 添加新場景: {name}")
 
-                # Update terminology
+                # 純添加新名詞（不修改既有）
                 for term in result.get("new_terms", []):
-                    if term.get("term") and term.get("term") not in world.terminology:
-                        world.terminology[term["term"]] = term.get("def", "")
-                for term in result.get("update_terms", []):
-                    if term.get("term") in world.terminology:
-                        world.terminology[term["term"]] = term.get("def", "")
+                    name = term.get("name", "")
+                    desc = term.get("desc", "")
+                    if name and name not in world.terminology:
+                        world.terminology[name] = desc
+                        self.debug_log(f"📚 添加新名詞: {name}")
 
-                # Update plot points
+                # 添加新情節點
                 for plot in result.get("plot_points", []):
                     if plot and plot not in world.plot_points:
                         world.plot_points.append(plot)
+                        self.debug_log(f"📖 添加情節點: {plot}")
                 
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.warning(f"世界設定更新失敗: {str(e)}")
+            logger.warning(f"世界設定添加失敗: {str(e)}")
     
     def _get_world_context(self) -> str:
         """獲取世界設定上下文"""
@@ -444,51 +446,92 @@ class NovelWriterCore:
         threading.Thread(target=run_consolidation, daemon=True).start()
 
     def _consolidate_world_comprehensive(self) -> Optional[WorldBuilding]:
-        """執行全面的世界設定整理"""
+        """執行全面的世界設定整理 - 嚴格合併模式，由解析器處理"""
         
         consolidation_prompt = f"""
-請整理以下世界設定，解決重複和命名不一致問題：
+執行世界設定條目的嚴格合併與整理。請嚴格按照以下規則進行：
 
 【當前完整設定】
 角色：{json.dumps(self.project.world_building.characters, ensure_ascii=False, indent=2)}
 場景：{json.dumps(self.project.world_building.settings, ensure_ascii=False, indent=2)}
 名詞：{json.dumps(self.project.world_building.terminology, ensure_ascii=False, indent=2)}
+情節點：{json.dumps(self.project.world_building.plot_points, ensure_ascii=False)}
 
-【整理要求】
-1. 合併重複角色：如"疤面男"、"疤面大漢"合併為一個主要項目
-2. 統一場景命名：相關場景合併，如"下水道"系列
-3. 歸類相似名詞：如各種"霧氣"歸類到主要術語
-4. 建立標準命名：每類事物確立一個標準名稱
+【嚴格合併規則】
+1. 重複識別：找出指稱同一事物的多個條目（如："疤面男"、"疤面大漢"、"有疤的男人"）
+2. 合併原則：保留最完整的描述，融合其他條目的核心信息
+3. 命名標準：選擇最常用或最準確的名稱作為標準名
+4. 內容約束：只能基於現有條目內容進行合併，絕對不可創作新內容
+5. 無創作規則：不得添加任何未在原始條目中明確提及的信息
+
+【處理步驟】
+第一步：識別重複項目
+第二步：選定標準名稱
+第三步：合併描述內容（僅基於現有內容）
+第四步：生成變更日誌
+
+【輸出要求】
+- 只輸出確實需要合併的項目
+- 描述必須完全基於原始內容，不得增添任何新信息
+- 變更日誌必須具體說明合併的依據和過程
+- 不限制輸出字數，確保合併後的描述完整準確
 
 輸出格式：
 {{
-    "characters": {{"林恩曦": "女主角描述", "疤面男": "合併後描述"}},
-    "settings": {{"上庄": "主要舞台", "下水道系統": "合併後場景"}},
-    "terminology": {{"陰陽眼": "特殊能力", "黑霧": "合併後術語"}},
-    "plot_points": ["重要情節點1", "重要情節點2"],
-    "changes_log": ["合併了3個重複角色", "整合了5個場景"]
+    "characters": {{"標準角色名": "基於原始條目的合併描述"}},
+    "settings": {{"標準場景名": "基於原始條目的合併描述"}},
+    "terminology": {{"標準名詞": "基於原始條目的合併定義"}},
+    "plot_points": ["去重後的情節點"],
+    "changes_log": [
+        "合併角色：'疤面男'+'疤面大漢' -> '疤面男'（基於頻率選擇）",
+        "合併場景：'下水道入口'+'下水道通道' -> '下水道系統'（基於範圍整合）"
+    ]
 }}
+
+注意：如果沒有發現需要合併的重複項目，請返回原始設定並在changes_log中說明"未發現需要合併的重複項目"。
         """
         
         try:
+            # 使用規劃模型進行嚴格的設定整理
             result = self.llm_service.call_llm_with_thinking(
                 consolidation_prompt, TaskType.WORLD_BUILDING, use_planning_model=True
             )
             
             if result:
-                # 記錄變更
+                # 記錄詳細的變更日誌
                 if "changes_log" in result:
+                    self.debug_log("🔧 開始設定整理變更記錄:")
                     for change in result["changes_log"]:
-                        self.debug_log(f"🔧 設定整理: {change}")
+                        self.debug_log(f"   📋 {change}")
                 
-                # 創建新的世界設定對象
-                return WorldBuilding(
-                    characters=result.get("characters", {}),
-                    settings=result.get("settings", {}),
-                    terminology=result.get("terminology", {}),
-                    plot_points=result.get("plot_points", []),
-                    chapter_notes=self.project.world_building.chapter_notes
+                # 建立合併後的世界設定
+                consolidated_world = WorldBuilding(
+                    characters=result.get("characters", self.project.world_building.characters),
+                    settings=result.get("settings", self.project.world_building.settings),
+                    terminology=result.get("terminology", self.project.world_building.terminology),
+                    plot_points=result.get("plot_points", self.project.world_building.plot_points),
+                    relationships=self.project.world_building.relationships,  # 保持不變
+                    style_guide=self.project.world_building.style_guide,      # 保持不變
+                    chapter_notes=self.project.world_building.chapter_notes   # 保持不變
                 )
+                
+                # 統計合併效果
+                original_count = (len(self.project.world_building.characters) + 
+                                len(self.project.world_building.settings) + 
+                                len(self.project.world_building.terminology) +
+                                len(self.project.world_building.plot_points))
+                
+                new_count = (len(consolidated_world.characters) + 
+                           len(consolidated_world.settings) + 
+                           len(consolidated_world.terminology) +
+                           len(consolidated_world.plot_points))
+                
+                if original_count != new_count:
+                    self.debug_log(f"🧹 設定整理完成：{original_count} -> {new_count} 項目")
+                else:
+                    self.debug_log("🧹 設定整理完成：未發現需要合併的項目")
+                
+                return consolidated_world
             
             return None
             

@@ -166,15 +166,15 @@ class DynamicPromptBuilder:
 【篇幅控制】
 {self._get_length_guidance(target_words, stage_config.length_preference)}"""
 
-        # 在方法末尾添加
-        naming_constraints = self._build_naming_constraints(self.project.world_building)
+        # 強化世界設定用詞約束（requirement #3）
+        naming_constraints = self._build_enhanced_naming_constraints()
 
         if naming_constraints:
             base_prompt += f"""
 
 {naming_constraints}
 
-【重要】請嚴格遵守以上命名規範，確保故事的一致性。"""
+【⚠️ 關鍵要求】必須嚴格按照以上世界設定用詞進行寫作。這些設定經過多章節整理與合併，是故事的核心框架，絕對不可偏離。任何人物、地點、名詞都必須使用標準設定中的確切名稱和描述。"""
 
         return self._add_common_suffix(base_prompt, stage_config)
 
@@ -244,34 +244,92 @@ class DynamicPromptBuilder:
             
         return guidance
 
-    def _build_naming_constraints(self, world_building) -> str:
-        """構建命名約束指導"""
+    def _build_enhanced_naming_constraints(self) -> str:
+        """構建強化的世界設定用詞約束"""
+        world_building = self.project.world_building
         constraints = []
         
-        # 角色命名約束
+        # 如果沒有任何世界設定，返回基本提醒
+        if not (world_building.characters or world_building.settings or world_building.terminology):
+            return "【📝 世界設定提醒】目前世界設定檔為空，寫作時請注意建立一致的人物和場景命名。"
+        
+        constraints.append("🌍【世界設定框架 - 必須嚴格遵守】")
+        constraints.append("以下設定經過多章節累積與整理，是故事的標準框架：")
+        constraints.append("")
+        
+        # 角色設定 - 強化版
         if world_building.characters:
-            constraints.append("【角色命名規範】")
-            for name, desc in list(world_building.characters.items())[:10]:
-                constraints.append(f"- {name}: {desc}")
-            constraints.append("⚠️ 請使用以上確切名稱，不要創造變體或別名")
+            constraints.append("👥【標準角色設定】")
+            char_count = 0
+            for name, desc in world_building.characters.items():
+                if char_count >= 15:  # 增加顯示數量
+                    constraints.append(f"... (還有{len(world_building.characters) - 15}個角色)")
+                    break
+                constraints.append(f"✓ {name}：{desc}")
+                char_count += 1
+            constraints.append("")
+            constraints.append("🚨 角色命名鐵律：")
+            constraints.append("  - 必須使用上述確切名稱，一字不差")
+            constraints.append("  - 禁止創造變體、別名、昵稱")
+            constraints.append("  - 禁止修改角色設定描述")
             constraints.append("")
         
-        # 場景命名約束  
+        # 場景設定 - 強化版
         if world_building.settings:
-            constraints.append("【場景命名規範】")
-            for name, desc in list(world_building.settings.items())[:8]:
-                constraints.append(f"- {name}: {desc}")
-            constraints.append("⚠️ 請使用以上標準場景名稱")
+            constraints.append("🏞️【標準場景設定】")
+            setting_count = 0
+            for name, desc in world_building.settings.items():
+                if setting_count >= 12:  # 增加顯示數量
+                    constraints.append(f"... (還有{len(world_building.settings) - 12}個場景)")
+                    break
+                constraints.append(f"✓ {name}：{desc}")
+                setting_count += 1
+            constraints.append("")
+            constraints.append("🚨 場景命名鐵律：")
+            constraints.append("  - 必須使用上述標準場景名稱")
+            constraints.append("  - 禁止創造相似或變體名稱")
+            constraints.append("  - 場景描述必須與設定一致")
             constraints.append("")
         
-        # 專有名詞約束
+        # 專有名詞 - 強化版
         if world_building.terminology:
-            constraints.append("【專有名詞規範】")
-            for term, definition in list(world_building.terminology.items())[:10]:
-                constraints.append(f"- {term}: {definition}")
-            constraints.append("⚠️ 請使用以上標準術語，保持概念統一")
+            constraints.append("📚【標準術語設定】")
+            term_count = 0
+            for term, definition in world_building.terminology.items():
+                if term_count >= 12:  # 增加顯示數量
+                    constraints.append(f"... (還有{len(world_building.terminology) - 12}個術語)")
+                    break
+                constraints.append(f"✓ {term}：{definition}")
+                term_count += 1
+            constraints.append("")
+            constraints.append("🚨 術語使用鐵律：")
+            constraints.append("  - 必須使用標準術語的確切定義")
+            constraints.append("  - 禁止創造同義詞或相似概念")
+            constraints.append("  - 術語含義不可隨意擴展")
+            constraints.append("")
+        
+        # 重要情節線索
+        if world_building.plot_points:
+            plot_display = world_building.plot_points[:8]  # 顯示前8個
+            constraints.append("📖【重要情節線索】")
+            for i, plot in enumerate(plot_display, 1):
+                constraints.append(f"{i}. {plot}")
+            if len(world_building.plot_points) > 8:
+                constraints.append(f"... (還有{len(world_building.plot_points) - 8}個情節點)")
+            constraints.append("")
+        
+        # 總結約束
+        constraints.append("🔒【終極約束原則】")
+        constraints.append("1. 世界設定 = 故事DNA，不可變動")
+        constraints.append("2. 人物、地點、術語 = 已定義標準，嚴格執行")
+        constraints.append("3. 任何偏離 = 破壞故事連貫性")
+        constraints.append("4. 寫作創意 = 在標準框架內發揮")
         
         return "\n".join(constraints)
+    
+    def _build_naming_constraints(self, world_building) -> str:
+        """構建命名約束指導（保留舊版本以維持兼容性）"""
+        return self._build_enhanced_naming_constraints()
 
 
 class PromptManager:
@@ -307,7 +365,7 @@ JSON格式：
     "title": "標題",
     "summary": "故事概要",
     "themes": ["主題1", "主題2"],
-    "estimated_chapters": 數字,
+    "estimated_chapters": 15,
     "main_characters": [{"name": "角色名", "desc": "角色描述"}],
     "world_setting": "世界觀",
     "story_flow": "完整的故事發展軌跡 - 從起始情境如何自然演變，經歷什麼樣的變化與轉折，最終走向什麼樣的結局",
@@ -364,7 +422,7 @@ JSON格式：
 JSON格式：
 {
     "content": "完整的段落內容",
-    "word_count": 實際字數
+    "word_count": 500
 }""",
             
             TaskType.WORLD_BUILDING: """
