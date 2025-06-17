@@ -1,3 +1,4 @@
-/chapter
-/__pycache__
+chapter/
+__pycache__/
 *.json
+claude.md
