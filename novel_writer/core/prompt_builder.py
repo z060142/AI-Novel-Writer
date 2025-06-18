@@ -166,8 +166,8 @@ class DynamicPromptBuilder:
 【篇幅控制】
 {self._get_length_guidance(target_words, stage_config.length_preference)}"""
 
-        # 強化世界設定用詞約束（requirement #3）
-        naming_constraints = self._build_enhanced_naming_constraints()
+        # 強化世界設定用詞約束（requirement #3）包含章節情節摘要
+        naming_constraints = self._build_enhanced_naming_constraints(chapter_index)
 
         if naming_constraints:
             base_prompt += f"""
@@ -244,8 +244,8 @@ class DynamicPromptBuilder:
             
         return guidance
 
-    def _build_enhanced_naming_constraints(self) -> str:
-        """構建強化的世界設定用詞約束"""
+    def _build_enhanced_naming_constraints(self, current_chapter_index: int = None) -> str:
+        """構建強化的世界設定用詞約束，包含章節情節摘要"""
         world_building = self.project.world_building
         constraints = []
         
@@ -318,6 +318,26 @@ class DynamicPromptBuilder:
                 constraints.append(f"... (還有{len(world_building.plot_points) - 8}個情節點)")
             constraints.append("")
         
+        # 添加前面章節的情節摘要（如果有指定當前章節）
+        if current_chapter_index is not None and world_building.chapter_plot_summaries:
+            constraints.append("📚【前面章節情節流水帳】")
+            
+            for chapter_idx in range(current_chapter_index):
+                if chapter_idx in world_building.chapter_plot_summaries:
+                    summary = world_building.chapter_plot_summaries[chapter_idx]
+                    constraints.append(f"\n▸ 第{chapter_idx + 1}章《{summary.chapter_title}》")
+                    if summary.summary:
+                        # 簡潔的情節流水帳，已經控制在200字內
+                        constraints.append(f"  {summary.summary}")
+            constraints.append("")
+        
+        # 添加當前章節正在累積的情節點（如果有）
+        if current_chapter_index is not None and world_building.current_chapter_plot_points:
+            constraints.append(f"🔄【第{current_chapter_index + 1}章目前情節點】")
+            for i, point in enumerate(world_building.current_chapter_plot_points, 1):
+                constraints.append(f"{i}. {point}")
+            constraints.append("")
+        
         # 總結約束
         constraints.append("🔒【終極約束原則】")
         constraints.append("1. 世界設定 = 故事DNA，不可變動")
@@ -329,7 +349,7 @@ class DynamicPromptBuilder:
     
     def _build_naming_constraints(self, world_building) -> str:
         """構建命名約束指導（保留舊版本以維持兼容性）"""
-        return self._build_enhanced_naming_constraints()
+        return self._build_enhanced_naming_constraints(None)
 
 
 class PromptManager:

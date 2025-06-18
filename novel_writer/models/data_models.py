@@ -72,15 +72,30 @@ class Chapter:
 
 
 @dataclass
+class ChapterPlotSummary:
+    """章節情節摘要"""
+    chapter_index: int
+    chapter_title: str
+    plot_points: List[str] = field(default_factory=list)  # 該章節的詳細情節點
+    summary: str = ""  # 章節完成後生成的詳細摘要
+    key_developments: List[str] = field(default_factory=list)  # 關鍵劇情發展
+    characters_introduced: List[str] = field(default_factory=list)  # 新登場角色
+    settings_introduced: List[str] = field(default_factory=list)  # 新出現場景
+
+@dataclass
 class WorldBuilding:
     """世界設定數據類"""
     characters: Dict[str, str] = None
     settings: Dict[str, str] = None
     terminology: Dict[str, str] = None
-    plot_points: List[str] = None
+    plot_points: List[str] = None  # 保留原有的全局情節點（向後兼容）
     relationships: List[Dict] = None
     style_guide: str = ""
     chapter_notes: List[str] = None  # 新增：章節註記，記錄各項設定出現的章節
+    
+    # 新增：按章節組織的情節處理
+    chapter_plot_summaries: Dict[int, ChapterPlotSummary] = None  # 按章節索引存儲情節摘要
+    current_chapter_plot_points: List[str] = None  # 當前章節正在累積的情節點
     
     def __post_init__(self):
         if self.characters is None:
@@ -95,6 +110,10 @@ class WorldBuilding:
             self.relationships = []
         if self.chapter_notes is None:
             self.chapter_notes = []
+        if self.chapter_plot_summaries is None:
+            self.chapter_plot_summaries = {}
+        if self.current_chapter_plot_points is None:
+            self.current_chapter_plot_points = []
 
 
 @dataclass

@@ -1,8 +1,22 @@
-# 小說寫作器重構報告
+# 📚 小說寫作器 - 重構版
 
-## 重構概述
+## 📖 專案概述
+
+這是一個層次化的中文小說寫作應用程式，使用Python和Tkinter構建，透過AI模型（API呼叫）生成結構化的小說內容，包括大綱、章節和段落。
 
 原本龐大的 `novel_writer.py` (4257 行) 已被成功重構為模組化架構，提升了可維護性和可擴展性。
+
+## 🚀 快速開始
+
+### 運行應用程式
+```bash
+python3 novel_writer.py
+```
+
+### 安裝依賴
+```bash
+pip install -r requirements.txt
+```
 
 ## 📁 新架構
 
@@ -94,6 +108,39 @@ result = core.generate_outline("請寫一個科幻小說大綱")
 | 行 1601-4247 | ui/gui.py | GUI介面 |
 | 行 212-230 | utils/decorators.py | 工具函數 |
 
+## 🧪 測試
+
+### 運行測試
+```bash
+# 運行所有測試
+python run_tests.py
+
+# 運行特定模組測試
+python -m pytest tests/core/ -v
+python -m pytest tests/models/ -v
+python -m pytest tests/services/ -v
+```
+
+### 測試覆蓋範圍
+```
+tests/
+├── core/                    # 核心邏輯測試
+├── models/                  # 資料模型測試
+├── services/                # 服務層測試
+├── utils/                   # 工具測試
+├── test_consolidation_logic.py    # 整理邏輯測試
+├── test_new_buttons.py             # 新功能測試
+├── test_project_loading.py        # 專案載入測試
+├── test_serialization_fix.py      # 序列化修復測試
+└── test_integration.py            # 整合測試
+```
+
+## 📚 文檔
+
+- **`CLAUDE.md`** - Claude Code 工作指引
+- **`DEVELOPMENT_HISTORY.md`** - 完整開發歷程記錄
+- **`README_REFACTOR.md`** - 本檔案，重構說明
+
 ## 🎯 維護建議
 
 1. **新功能開發**: 根據功能性質放入對應模組
@@ -102,6 +149,6 @@ result = core.generate_outline("請寫一個科幻小說大綱")
 4. **文檔**: 保持各模組的docstring更新
 
 ---
-重構完成時間: 2025-06-17  
-原始檔案: 4257 行 → 新入口: 30 行  
-模組數量: 17 個專門檔案
+**重構完成時間:** 2025-06-17  
+**原始檔案:** 4257 行 → **新入口:** 30 行  
+**模組數量:** 17 個專門檔案 + 完整測試套件

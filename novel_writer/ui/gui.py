@@ -30,6 +30,9 @@ class NovelWriterGUI:
         # 當前狀態
         self.current_action = ""
         self.selected_context_content = ""  # 存儲選中的上下文內容
+        self.auto_writing_worker_running = False  # 防止多重啟動
+        self.task_running = False  # 全局任務鎖，防止任務重疊
+        self.current_task_type = ""  # 當前執行的任務類型
         
         # 先設置UI
         self.setup_ui()
@@ -245,9 +248,18 @@ class NovelWriterGUI:
         
         work_frame.columnconfigure(1, weight=1)
         
+        # 章節準備按鈕 - 水平排列
+        prep_buttons_frame = ttk.Frame(work_frame)
+        prep_buttons_frame.grid(row=2, column=0, columnspan=2, sticky=tk.W+tk.E, pady=(3, 2))
+        
+        ttk.Button(prep_buttons_frame, text="生成章節大綱", 
+                  command=self.generate_current_chapter_outline, width=10).pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Button(prep_buttons_frame, text="劃分段落", 
+                  command=self.divide_current_chapter_paragraphs, width=10).pack(side=tk.LEFT)
+        
         # 寫作按鈕 - 水平排列
         write_buttons_frame = ttk.Frame(work_frame)
-        write_buttons_frame.grid(row=2, column=0, columnspan=2, sticky=tk.W+tk.E, pady=(3, 0))
+        write_buttons_frame.grid(row=3, column=0, columnspan=2, sticky=tk.W+tk.E, pady=(2, 0))
         
         ttk.Button(write_buttons_frame, text="寫作", 
                   command=self.write_current_paragraph, width=10).pack(side=tk.LEFT, padx=(0, 2))
@@ -731,6 +743,12 @@ class NovelWriterGUI:
     
     def generate_outline(self):
         """生成大綱"""
+        # 檢查任務鎖
+        if self.task_running:
+            self.debug_log(f"⚠️ 有任務正在執行中 ({self.current_task_type})，無法生成大綱")
+            messagebox.showwarning("任務衝突", f"目前有任務正在執行中：{self.current_task_type}\n請等待完成後再試。")
+            return
+            
         if not self.title_entry.get().strip():
             messagebox.showerror("錯誤", "請先輸入小說標題")
             return
@@ -747,6 +765,11 @@ class NovelWriterGUI:
         
         def run_task():
             try:
+                # 設置任務鎖
+                self.task_running = True
+                self.current_task_type = "生成大綱"
+                self.debug_log(f"🔒 開始任務: {self.current_task_type}")
+                
                 self.current_action = "正在生成大綱..."
                 self.debug_log("🚀 開始生成大綱")
                 
@@ -771,12 +794,22 @@ class NovelWriterGUI:
                 self.debug_log(f"❌ 生成大綱時發生錯誤: {str(e)}")
                 messagebox.showerror("錯誤", f"生成大綱失敗: {str(e)}")
             finally:
+                # 釋放任務鎖
+                self.task_running = False
+                self.current_task_type = ""
                 self.current_action = ""
+                self.debug_log(f"🔓 任務完成，釋放鎖定")
         
         threading.Thread(target=run_task, daemon=True).start()
     
     def divide_chapters(self):
         """劃分章節"""
+        # 檢查任務鎖
+        if self.task_running:
+            self.debug_log(f"⚠️ 有任務正在執行中 ({self.current_task_type})，無法劃分章節")
+            messagebox.showwarning("任務衝突", f"目前有任務正在執行中：{self.current_task_type}\n請等待完成後再試。")
+            return
+            
         if not self.project.outline:
             messagebox.showerror("錯誤", "請先生成大綱")
             return
@@ -786,6 +819,11 @@ class NovelWriterGUI:
         
         def run_task():
             try:
+                # 設置任務鎖
+                self.task_running = True
+                self.current_task_type = "劃分章節"
+                self.debug_log(f"🔒 開始任務: {self.current_task_type}")
+                
                 self.current_action = "正在劃分章節..."
                 self.debug_log("🚀 開始劃分章節")
                 
@@ -808,7 +846,11 @@ class NovelWriterGUI:
                 self.debug_log(f"❌ 劃分章節時發生錯誤: {str(e)}")
                 messagebox.showerror("錯誤", f"劃分章節失敗: {str(e)}")
             finally:
+                # 釋放任務鎖
+                self.task_running = False
+                self.current_task_type = ""
                 self.current_action = ""
+                self.debug_log(f"🔓 任務完成，釋放鎖定")
         
         threading.Thread(target=run_task, daemon=True).start()
     
@@ -844,8 +886,17 @@ class NovelWriterGUI:
         
         # 如果章節還沒有段落，先生成章節大綱和段落劃分
         if not chapter.paragraphs:
+            # 檢查任務鎖
+            if self.task_running:
+                self.debug_log(f"⚠️ 有任務正在執行中 ({self.current_task_type})，跳過章節 {chapter_index+1} 的準備工作")
+                return
             def run_task():
                 try:
+                    # 設置任務鎖
+                    self.task_running = True
+                    self.current_task_type = f"第{chapter_index+1}章準備"
+                    self.debug_log(f"🔒 開始任務: {self.current_task_type}")
+                    
                     self.debug_log(f"🚀 為第{chapter_index+1}章生成大綱和段落")
                     
                     # 生成章節大綱
@@ -861,6 +912,11 @@ class NovelWriterGUI:
                     
                 except Exception as e:
                     self.debug_log(f"❌ 準備第{chapter_index+1}章時發生錯誤: {str(e)}")
+                finally:
+                    # 釋放任務鎖
+                    self.task_running = False
+                    self.current_task_type = ""
+                    self.debug_log(f"🔓 任務完成，釋放鎖定")
             
             threading.Thread(target=run_task, daemon=True).start()
         else:
@@ -885,6 +941,12 @@ class NovelWriterGUI:
     
     def write_current_paragraph(self):
         """寫作當前段落"""
+        # 檢查任務鎖
+        if self.task_running:
+            self.debug_log(f"⚠️ 有任務正在執行中 ({self.current_task_type})，無法寫作段落")
+            messagebox.showwarning("任務衝突", f"目前有任務正在執行中：{self.current_task_type}\n請等待完成後再試。")
+            return
+            
         chapter_index = self.chapter_combo.current()
         paragraph_index = self.paragraph_combo.current()
         
@@ -894,6 +956,11 @@ class NovelWriterGUI:
         
         def run_task():
             try:
+                # 設置任務鎖
+                self.task_running = True
+                self.current_task_type = f"寫作第{chapter_index+1}章第{paragraph_index+1}段"
+                self.debug_log(f"🔒 開始任務: {self.current_task_type}")
+                
                 self.current_action = f"正在寫作第{chapter_index+1}章第{paragraph_index+1}段..."
                 self.debug_log(f"🚀 開始寫作第{chapter_index+1}章第{paragraph_index+1}段")
                 
@@ -911,7 +978,126 @@ class NovelWriterGUI:
                 self.debug_log(f"❌ 寫作段落時發生錯誤: {str(e)}")
                 self.root.after(0, lambda: messagebox.showerror("錯誤", f"寫作失敗: {str(e)}"))
             finally:
+                # 釋放任務鎖
+                self.task_running = False
+                self.current_task_type = ""
                 self.current_action = ""
+                self.debug_log(f"🔓 任務完成，釋放鎖定")
+        
+        threading.Thread(target=run_task, daemon=True).start()
+    
+    def generate_current_chapter_outline(self):
+        """為當前選中章節生成大綱"""
+        # 檢查任務鎖
+        if self.task_running:
+            self.debug_log(f"⚠️ 有任務正在執行中 ({self.current_task_type})，無法生成章節大綱")
+            messagebox.showwarning("任務衝突", f"目前有任務正在執行中：{self.current_task_type}\n請等待完成後再試。")
+            return
+            
+        chapter_index = self.chapter_combo.current()
+        if chapter_index < 0:
+            messagebox.showerror("錯誤", "請先選擇章節")
+            return
+        
+        if chapter_index >= len(self.project.chapters):
+            messagebox.showerror("錯誤", "章節索引超出範圍")
+            return
+        
+        def run_task():
+            try:
+                # 設置任務鎖
+                self.task_running = True
+                self.current_task_type = f"生成第{chapter_index+1}章大綱"
+                self.debug_log(f"🔒 開始任務: {self.current_task_type}")
+                
+                self.debug_log(f"🚀 為第{chapter_index+1}章生成大綱")
+                
+                # 生成章節大綱
+                result = self.core.generate_chapter_outline(chapter_index, self.tree_callback)
+                
+                if result:
+                    # 更新樹視圖
+                    self.root.after(0, self.refresh_tree)
+                    
+                    # 如果有內容，顯示在內容區
+                    if isinstance(result, dict):
+                        import json
+                        outline_text = json.dumps(result, ensure_ascii=False, indent=2)
+                        self.root.after(0, lambda: self.display_content(outline_text, f"第{chapter_index+1}章大綱"))
+                    
+                    self.debug_log(f"✅ 第{chapter_index+1}章大綱生成完成")
+                    self.root.after(0, lambda: messagebox.showinfo("成功", f"第{chapter_index+1}章大綱生成完成！"))
+                else:
+                    self.debug_log(f"❌ 第{chapter_index+1}章大綱生成失敗")
+                    self.root.after(0, lambda: messagebox.showerror("錯誤", "章節大綱生成失敗"))
+                    
+            except Exception as e:
+                self.debug_log(f"❌ 生成第{chapter_index+1}章大綱時發生錯誤: {str(e)}")
+                self.root.after(0, lambda: messagebox.showerror("錯誤", f"生成章節大綱失敗: {str(e)}"))
+            finally:
+                # 釋放任務鎖
+                self.task_running = False
+                self.current_task_type = ""
+                self.debug_log(f"🔓 任務完成，釋放鎖定")
+        
+        threading.Thread(target=run_task, daemon=True).start()
+    
+    def divide_current_chapter_paragraphs(self):
+        """為當前選中章節劃分段落"""
+        # 檢查任務鎖
+        if self.task_running:
+            self.debug_log(f"⚠️ 有任務正在執行中 ({self.current_task_type})，無法劃分段落")
+            messagebox.showwarning("任務衝突", f"目前有任務正在執行中：{self.current_task_type}\n請等待完成後再試。")
+            return
+            
+        chapter_index = self.chapter_combo.current()
+        if chapter_index < 0:
+            messagebox.showerror("錯誤", "請先選擇章節")
+            return
+        
+        if chapter_index >= len(self.project.chapters):
+            messagebox.showerror("錯誤", "章節索引超出範圍")
+            return
+        
+        chapter = self.project.chapters[chapter_index]
+        
+        # 檢查是否有章節大綱
+        if not chapter.outline:
+            if messagebox.askyesno("提示", "此章節尚無大綱，是否先生成章節大綱？"):
+                self.generate_current_chapter_outline()
+                return
+        
+        def run_task():
+            try:
+                # 設置任務鎖
+                self.task_running = True
+                self.current_task_type = f"劃分第{chapter_index+1}章段落"
+                self.debug_log(f"🔒 開始任務: {self.current_task_type}")
+                
+                self.debug_log(f"🚀 為第{chapter_index+1}章劃分段落")
+                
+                # 劃分段落
+                paragraphs = self.core.divide_paragraphs(chapter_index, self.tree_callback)
+                
+                if paragraphs:
+                    # 更新段落列表和樹視圖
+                    self.root.after(0, self.update_paragraph_list)
+                    self.root.after(0, self.refresh_tree)
+                    
+                    self.debug_log(f"✅ 第{chapter_index+1}章段落劃分完成，共{len(paragraphs)}段")
+                    self.root.after(0, lambda: messagebox.showinfo("成功", f"第{chapter_index+1}章段落劃分完成！共{len(paragraphs)}段"))
+                else:
+                    self.debug_log(f"❌ 第{chapter_index+1}章段落劃分失敗")
+                    self.root.after(0, lambda: messagebox.showerror("錯誤", "段落劃分失敗"))
+                    
+            except Exception as e:
+                self.debug_log(f"❌ 劃分第{chapter_index+1}章段落時發生錯誤: {str(e)}")
+                self.root.after(0, lambda: messagebox.showerror("錯誤", f"劃分段落失敗: {str(e)}"))
+            finally:
+                # 釋放任務鎖
+                self.task_running = False
+                self.current_task_type = ""
+                self.debug_log(f"🔓 任務完成，釋放鎖定")
         
         threading.Thread(target=run_task, daemon=True).start()
     
@@ -1072,42 +1258,18 @@ class NovelWriterGUI:
             )
             
             if filename:
-                # 將項目數據轉換為可序列化的格式
-                chapters_data = []
-                for chapter in self.project.chapters:
-                    chapter_dict = asdict(chapter)
-                    # 轉換章節狀態枚舉為字符串
-                    chapter_dict["status"] = chapter.status.value
-                    
-                    # 轉換段落狀態枚舉為字符串
-                    for paragraph_dict in chapter_dict["paragraphs"]:
-                        if "status" in paragraph_dict:
-                            # 找到對應的段落對象來獲取狀態
-                            para_index = next(i for i, p in enumerate(chapter.paragraphs) 
-                                            if p.order == paragraph_dict["order"])
-                            paragraph_dict["status"] = chapter.paragraphs[para_index].status.value
-                    
-                    chapters_data.append(chapter_dict)
+                # 使用新的序列化工具準備項目數據
+                from ..utils.serialization import SerializationHelper, ProjectSerializer
                 
-                project_data = {
-                    "title": self.project.title,
-                    "theme": self.project.theme,
-                    "outline": self.project.outline,
-                    "outline_additional_prompt": self.project.outline_additional_prompt,
-                    "chapters_additional_prompt": self.project.chapters_additional_prompt,
-                    "current_context": getattr(self.project, 'current_context', ""),
-                    "chapters": chapters_data,
-                    "world_building": asdict(self.project.world_building),
-                    "global_config": asdict(self.project.global_config) if hasattr(self.project, 'global_config') else {}
-                }
+                project_data = SerializationHelper.prepare_project_for_save(self.project)
                 
                 # 安全確認：絕對不儲存API配置
                 if "api_config" in project_data:
                     del project_data["api_config"]
                     self.debug_log("🔒 已確保API配置不會被儲存到專案檔")
                 
-                with open(filename, "w", encoding="utf-8") as f:
-                    json.dump(project_data, f, ensure_ascii=False, indent=2)
+                # 使用安全的JSON序列化
+                ProjectSerializer.safe_json_dump(project_data, filename)
                 
                 self.debug_log(f"✅ 項目已保存到: {filename}")
                 messagebox.showinfo("成功", "項目保存成功！")
@@ -1194,8 +1356,25 @@ class NovelWriterGUI:
                     
                     self.project.chapters.append(chapter)
                 
-                # 重建世界設定
+                # 重建世界設定（支援新的章節情節摘要結構）
                 world_data = project_data.get("world_building", {})
+                
+                # 處理章節情節摘要（如果存在）
+                chapter_plot_summaries = {}
+                if "chapter_plot_summaries" in world_data:
+                    from ..models.data_models import ChapterPlotSummary
+                    for chapter_idx_str, summary_data in world_data["chapter_plot_summaries"].items():
+                        chapter_idx = int(chapter_idx_str)
+                        chapter_plot_summaries[chapter_idx] = ChapterPlotSummary(
+                            chapter_index=summary_data.get("chapter_index", chapter_idx),
+                            chapter_title=summary_data.get("chapter_title", ""),
+                            plot_points=summary_data.get("plot_points", []),
+                            summary=summary_data.get("summary", ""),
+                            key_developments=summary_data.get("key_developments", []),
+                            characters_introduced=summary_data.get("characters_introduced", []),
+                            settings_introduced=summary_data.get("settings_introduced", [])
+                        )
+                
                 self.project.world_building = WorldBuilding(
                     characters=world_data.get("characters", {}),
                     settings=world_data.get("settings", {}),
@@ -1203,7 +1382,10 @@ class NovelWriterGUI:
                     plot_points=world_data.get("plot_points", []),
                     relationships=world_data.get("relationships", []),
                     style_guide=world_data.get("style_guide", ""),
-                    chapter_notes=world_data.get("chapter_notes", [])  # 新增：確保舊專案有這個欄位
+                    chapter_notes=world_data.get("chapter_notes", []),
+                    # 新的章節情節處理字段
+                    chapter_plot_summaries=chapter_plot_summaries,
+                    current_chapter_plot_points=world_data.get("current_chapter_plot_points", [])
                 )
                 
                 # 安全性措施：完全忽略專案檔中的API配置，只使用api_config.json
@@ -1219,9 +1401,19 @@ class NovelWriterGUI:
                 # 處理global_config：從專案檔載入，如果沒有則使用預設值
                 if "global_config" in project_data:
                     global_config_data = project_data["global_config"]
+                    # 使用序列化工具處理枚舉類型的反序列化
+                    from ..utils.serialization import ProjectSerializer
+                    
+                    writing_style = ProjectSerializer.deserialize_writing_style(
+                        global_config_data.get("writing_style", "第三人稱限制視角")
+                    )
+                    pacing_style = ProjectSerializer.deserialize_pacing_style(
+                        global_config_data.get("pacing_style", "平衡型")
+                    )
+                    
                     self.project.global_config = GlobalWritingConfig(
-                        writing_style=global_config_data.get("writing_style", "第三人稱限制視角"),
-                        pacing_style=global_config_data.get("pacing_style", "平衡型"),
+                        writing_style=writing_style,
+                        pacing_style=pacing_style,
                         tone=global_config_data.get("tone", "溫暖"),
                         continuous_themes=global_config_data.get("continuous_themes", []),
                         must_include_elements=global_config_data.get("must_include_elements", []),
@@ -1311,6 +1503,11 @@ class NovelWriterGUI:
     def toggle_auto_writing(self):
         """切換自動寫作模式"""
         if not self.auto_writing:
+            # 檢查是否有其他任務正在執行
+            if self.task_running:
+                self.debug_log(f"⚠️ 有任務正在執行中 ({self.current_task_type})，無法啟動自動寫作")
+                messagebox.showwarning("任務衝突", f"目前有任務正在執行中：{self.current_task_type}\n請等待完成後再試。")
+                return
             # 開始自動寫作
             if not self.project.chapters:
                 messagebox.showerror("錯誤", "請先劃分章節")
@@ -1322,6 +1519,11 @@ class NovelWriterGUI:
             self.smart_auto_button.config(state="disabled")
             self.progress_var.set("自動寫作已啟動")
             self.debug_log("🤖 自動寫作模式啟動")
+            
+            # 檢查是否已有線程在運行
+            if self.auto_writing_worker_running:
+                self.debug_log("⚠️ 自動寫作線程已在運行，忽略重複啟動")
+                return
             
             # 開始自動寫作線程
             threading.Thread(target=self.auto_writing_worker, daemon=True).start()
@@ -1335,7 +1537,13 @@ class NovelWriterGUI:
     
     def toggle_smart_auto_writing(self):
         """切換智能自動寫作模式"""
+        self.debug_log(f"🔘 toggle_smart_auto_writing 被調用，當前狀態: auto_writing={self.auto_writing}")
         if not self.auto_writing:
+            # 檢查是否有其他任務正在執行
+            if self.task_running:
+                self.debug_log(f"⚠️ 有任務正在執行中 ({self.current_task_type})，無法啟動自動寫作")
+                messagebox.showwarning("任務衝突", f"目前有任務正在執行中：{self.current_task_type}\n請等待完成後再試。")
+                return
             # 開始智能自動寫作
             if not self.project.chapters:
                 messagebox.showerror("錯誤", "請先劃分章節")
@@ -1348,7 +1556,13 @@ class NovelWriterGUI:
             self.progress_var.set("智能自動寫作已啟動")
             self.debug_log("🧠 智能自動寫作模式啟動")
             
+            # 檢查是否已有線程在運行
+            if self.auto_writing_worker_running:
+                self.debug_log("⚠️ 自動寫作線程已在運行，忽略重複啟動")
+                return
+                
             # 開始自動寫作線程
+            self.debug_log("🚀 即將啟動智能自動寫作線程")
             threading.Thread(target=self.auto_writing_worker, daemon=True).start()
         else:
             # 停止智能自動寫作
@@ -1360,6 +1574,24 @@ class NovelWriterGUI:
     
     def auto_writing_worker(self):
         """自動寫作工作線程"""
+        import threading
+        import time
+        thread_id = threading.current_thread().ident
+        start_time = time.strftime("%H:%M:%S")
+        
+        # 設置線程運行標記
+        if self.auto_writing_worker_running:
+            self.debug_log(f"⚠️ [線程{thread_id}] 檢測到已有線程運行，退出")
+            return
+        
+        self.auto_writing_worker_running = True
+        
+        # 設置任務鎖
+        self.task_running = True
+        self.current_task_type = f"自動寫作 ({self.auto_writing_mode})"
+        
+        self.debug_log(f"🔧 auto_writing_worker 線程啟動，模式: {self.auto_writing_mode}, 線程ID: {thread_id}, 時間: {start_time}")
+        self.debug_log(f"🔒 開始任務: {self.current_task_type}")
         try:
             delay = int(self.delay_var.get())
             
@@ -1372,8 +1604,11 @@ class NovelWriterGUI:
                     f"處理第{ci+1}章: {self.project.chapters[ci].title}"))
                 
                 # 確保章節有段落
+                import threading
+                current_thread_id = threading.current_thread().ident
+                self.debug_log(f"🔍 [線程{current_thread_id}] 檢查第{chapter_index+1}章段落狀態: 段落數={len(chapter.paragraphs)}, 章節狀態={chapter.status.value}")
                 if not chapter.paragraphs:
-                    self.debug_log(f"🚀 為第{chapter_index+1}章生成大綱和段落")
+                    self.debug_log(f"🚀 [線程{current_thread_id}] 為第{chapter_index+1}章生成大綱和段落")
                     
                     try:
                         # 標記章節為進行中狀態
@@ -1511,11 +1746,22 @@ class NovelWriterGUI:
                             self.root.after(0, self.update_paragraph_list)
                         self.root.after(0, self.refresh_tree)
                 
-                # 檢查章節是否完成
+                # 檢查章節是否完成並執行世界設定整理
                 chapter_completed = all(p.status == CreationStatus.COMPLETED for p in chapter.paragraphs)
                 if chapter_completed:
-                    chapter.status = CreationStatus.COMPLETED
-                    self.debug_log(f"🎉 第{chapter_index+1}章全部完成！")
+                    self.debug_log(f"🎉 第{chapter_index+1}章全部完成！開始同步整理工作...")
+                    
+                    # 調用核心的章節完成檢測（不觸發異步整理）
+                    # 然後執行同步的世界設定整理，確保完成後才繼續下一章
+                    if self.core.check_chapter_completion(chapter_index, trigger_consolidation=False):
+                        # 執行同步的世界設定整理
+                        self.debug_log(f"🔄 第{chapter_index+1}章整理工作開始（同步模式）")
+                        self.core.consolidate_world_after_chapter(chapter_index, sync_mode=True)
+                        self.debug_log(f"✅ 第{chapter_index+1}章整理工作全部完成")
+                        
+                        # 更新UI
+                        self.root.after(0, self.update_world_display)
+                        
                 elif any(p.status == CreationStatus.ERROR for p in chapter.paragraphs):
                     chapter.status = CreationStatus.ERROR
                     self.debug_log(f"⚠️ 第{chapter_index+1}章包含錯誤段落")
@@ -1545,6 +1791,13 @@ class NovelWriterGUI:
             self.root.after(0, lambda: self.auto_button.config(text="開始自動寫作", style=""))
             self.root.after(0, lambda: self.progress_var.set("自動寫作出錯"))
             self.root.after(0, self.refresh_tree)  # 出錯時也更新樹狀圖
+        finally:
+            # 清除線程運行標記和任務鎖
+            self.auto_writing_worker_running = False
+            self.task_running = False
+            self.current_task_type = ""
+            self.debug_log(f"🔧 [線程{threading.current_thread().ident}] auto_writing_worker 線程結束")
+            self.debug_log(f"🔓 任務完成，釋放鎖定")
     
     def get_writing_progress(self):
         """獲取寫作進度"""
@@ -1711,6 +1964,12 @@ class NovelWriterGUI:
     
     def regenerate_selected_content(self):
         """重新生成選中的內容"""
+        # 檢查任務鎖
+        if self.task_running:
+            self.debug_log(f"⚠️ 有任務正在執行中 ({self.current_task_type})，無法重新生成內容")
+            messagebox.showwarning("任務衝突", f"目前有任務正在執行中：{self.current_task_type}\n請等待完成後再試。")
+            return
+            
         selection = self.tree.selection()
         if not selection:
             messagebox.showwarning("提示", "請先選擇要重新生成的項目")
@@ -1916,6 +2175,11 @@ class NovelWriterGUI:
         
         def run_task():
             try:
+                # 設置任務鎖
+                self.task_running = True
+                self.current_task_type = f"重新生成第{chapter_index+1}章大綱"
+                self.debug_log(f"🔒 開始任務: {self.current_task_type}")
+                
                 self.debug_log(f"🔄 重新生成第{chapter_index+1}章大綱")
                 self.core.generate_chapter_outline(chapter_index)
                 self.root.after(0, self.refresh_tree)
@@ -1923,6 +2187,11 @@ class NovelWriterGUI:
             except Exception as e:
                 self.debug_log(f"❌ 重新生成第{chapter_index+1}章大綱失敗: {str(e)}")
                 self.root.after(0, lambda: messagebox.showerror("錯誤", f"重新生成失敗: {str(e)}"))
+            finally:
+                # 釋放任務鎖
+                self.task_running = False
+                self.current_task_type = ""
+                self.debug_log(f"🔓 任務完成，釋放鎖定")
         
         threading.Thread(target=run_task, daemon=True).start()
     
@@ -1935,6 +2204,11 @@ class NovelWriterGUI:
         
         def run_task():
             try:
+                # 設置任務鎖
+                self.task_running = True
+                self.current_task_type = f"重新生成第{chapter_index+1}章第{paragraph_index+1}段"
+                self.debug_log(f"🔒 開始任務: {self.current_task_type}")
+                
                 self.debug_log(f"🔄 重新生成第{chapter_index+1}章第{paragraph_index+1}段")
                 content = self.core.write_paragraph(chapter_index, paragraph_index)
                 if content:
@@ -1947,6 +2221,11 @@ class NovelWriterGUI:
             except Exception as e:
                 self.debug_log(f"❌ 重新生成第{chapter_index+1}章第{paragraph_index+1}段失敗: {str(e)}")
                 self.root.after(0, lambda: messagebox.showerror("錯誤", f"重新生成失敗: {str(e)}"))
+            finally:
+                # 釋放任務鎖
+                self.task_running = False
+                self.current_task_type = ""
+                self.debug_log(f"🔓 任務完成，釋放鎖定")
         
         threading.Thread(target=run_task, daemon=True).start()
     
@@ -2535,6 +2814,12 @@ class NovelWriterGUI:
     
     def enhanced_write_paragraph(self):
         """增強版段落寫作"""
+        # 檢查任務鎖
+        if self.task_running:
+            self.debug_log(f"⚠️ 有任務正在執行中 ({self.current_task_type})，無法智能寫作段落")
+            messagebox.showwarning("任務衝突", f"目前有任務正在執行中：{self.current_task_type}\n請等待完成後再試。")
+            return
+            
         chapter_index = self.chapter_combo.current()
         paragraph_index = self.paragraph_combo.current()
         
@@ -2561,6 +2846,11 @@ class NovelWriterGUI:
         
         def run_task():
             try:
+                # 設置任務鎖
+                self.task_running = True
+                self.current_task_type = f"智能寫作第{chapter_index+1}章第{paragraph_index+1}段"
+                self.debug_log(f"🔒 開始任務: {self.current_task_type}")
+                
                 self.current_action = f"正在智能寫作第{chapter_index+1}章第{paragraph_index+1}段..."
                 self.debug_log(f"🚀 開始智能寫作第{chapter_index+1}章第{paragraph_index+1}段")
                 self.debug_log(f"📝 使用額外指示: {additional_prompt}")
@@ -2583,7 +2873,11 @@ class NovelWriterGUI:
                 self.debug_log(f"❌ 智能寫作段落時發生錯誤: {str(e)}")
                 self.root.after(0, lambda: messagebox.showerror("錯誤", f"智能寫作失敗: {str(e)}"))
             finally:
+                # 釋放任務鎖
+                self.task_running = False
+                self.current_task_type = ""
                 self.current_action = ""
+                self.debug_log(f"🔓 任務完成，釋放鎖定")
         
         threading.Thread(target=run_task, daemon=True).start()
     
